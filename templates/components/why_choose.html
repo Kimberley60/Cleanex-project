@@ -1,0 +1,110 @@
+<section class="why-choose-section">
+
+    <div class="container">
+
+        <div class="row align-items-center g-5">
+
+            <!-- Left Side -->
+
+            <div class="col-lg-5">
+
+                <div class="why-content">
+
+                    <span class="section-badge">
+                        Why Choose Cleanex
+                    </span>
+
+                    <h2>
+                        {{ why_choose.title }}
+                    </h2>
+
+                    <p>
+                        {{ why_choose.subtitle }}
+                    </p>
+
+                    <a href="{{ why_choose.primary_button_url }}"
+                       class="btn btn-cleanex-primary">
+
+                        {{ why_choose.primary_button_text }}
+
+                    </a>
+
+                </div>
+
+            </div>
+
+            <!-- Right Side -->
+
+            <div class="col-lg-7">
+
+                <div class="row g-4">
+
+                    {% for feature in why_features %}
+
+                    <div class="col-md-6">
+
+                        <div class="feature-card">
+
+                            <div class="feature-icon">
+
+                                <i class="bi bi-{{ feature.icon }}"></i>
+
+                            </div>
+
+                            <h5>
+                                {{ feature.title }}
+                            </h5>
+
+                            <p>
+                                {{ feature.description }}
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    {% endfor %}
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<section class="statistics-section">
+
+    <div class="container">
+
+        <div class="row text-center">
+
+            {% for stat in statistics %}
+
+            <div class="col-6 col-md-3">
+
+                <div class="stat-item">
+
+                    <h3>
+                        {{ stat.value }}
+                    </h3>
+
+                    <p>
+                        {{ stat.label }}
+                    </p>
+
+                </div>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+</section>
+

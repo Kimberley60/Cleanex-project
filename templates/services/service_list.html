@@ -1,0 +1,24 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %}Services{% endblock %}
+
+{% block content %}
+
+{% include "includes/hero.html" %}
+
+<div class="container py-5">
+
+<h1 class="mb-4">Our Services</h1>
+
+<div class="row">
+
+{% for service in services %}
+{% include "components/service_card.html" %}
+{% endfor %}
+
+</div>
+
+</div>
+
+{% endblock %}

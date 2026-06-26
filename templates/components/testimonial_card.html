@@ -1,0 +1,117 @@
+<section class="section section-light">
+
+    <div class="container">
+
+        <div class="section-header text-center">
+
+            <span class="section-label">
+                Testimonials
+            </span>
+
+            <h2>
+                {{ testimonial_section.title }}
+            </h2>
+
+            <p>
+                {{ testimonial_section.subtitle }}
+            </p>
+
+        </div>
+
+
+        <div class="rating-summary">
+
+            <div class="rating-value">
+
+                4.9★
+
+            </div>
+
+            <div class="rating-text">
+
+                Average customer rating
+
+            </div>
+
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+            {% for testimonial in testimonials %}
+
+            <div class="col-md-6 col-lg-4">
+
+                <div class="testimonial-card">
+
+                    <div class="testimonial-rating">
+
+                        {% for _ in "12345" %}
+
+                            <i class="bi bi-star-fill"></i>
+
+                        {% endfor %}
+
+                    </div>
+
+                    {% if testimonial.service_name %}
+
+                    <div class="service-badge">
+
+                        {{ testimonial.service_name }}
+
+                    </div>
+
+                    {% endif %}
+
+                    <p class="testimonial-review">
+
+                        "{{ testimonial.comment }}"
+
+                    </p>
+
+                    <div class="testimonial-footer">
+
+                        <div class="testimonial-avatar">
+
+                            {% if testimonial.customer_image %}
+
+                            <img
+                            src="{{ testimonial.customer_image.url }}"
+                            alt="{{ testimonial.full_name }}">
+
+                            {% else %}
+
+                            {{ testimonial.customer_name|slice:":1" }}
+
+                            {% endif %}
+
+                        </div>
+
+                        <div>
+
+                            <h6>
+
+                                {{ testimonial.full_name }}
+
+                            </h6>
+
+                            <span>
+
+                                {{ testimonial.city }}
+
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+</section>

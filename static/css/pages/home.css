@@ -1,0 +1,307 @@
+
+/* Section Styling */
+.why-choose-section{
+    padding:120px 0 80px;
+}
+
+/* Left Content */
+.why-content h2{
+
+    font-size:3rem;
+
+    font-weight:800;
+
+    margin-bottom:1.5rem;
+}
+
+.why-content p{
+
+    color:#6c757d;
+
+    font-size:1.1rem;
+
+    margin-bottom:2rem;
+}
+
+
+/* Section Badge */
+.section-badge{
+
+    display:inline-block;
+
+    padding:8px 18px;
+
+    border-radius:50px;
+
+    background:rgba(13,110,253,.08);
+
+    color:#0d6efd;
+
+    font-weight:600;
+
+    margin-bottom:1rem;
+}
+
+/* Feature Card */
+
+.feature-card{
+
+    height:100%;
+
+    background:#fff;
+
+    padding:2rem;
+
+    border-radius:20px;
+
+    transition:.3s;
+
+    border:1px solid #edf2f7;
+}
+
+
+.feature-card:hover{
+
+    transform:translateY(-8px);
+
+    box-shadow:
+    0 15px 40px rgba(
+        0,
+        0,
+        0,
+        .08
+    );
+}
+
+
+/* Icon Styling  */
+
+.feature-icon{
+
+    width:60px;
+
+    height:60px;
+
+    border-radius:16px;
+
+    background:
+    rgba(13,110,253,.1);
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    margin-bottom:1rem;
+}
+
+.feature-icon i{
+
+    font-size:1.7rem;
+
+    color:#0d6efd;
+}
+
+
+/* Statistics Section */
+
+.statistics-section{
+
+    padding:70px 0;
+
+    background:#f8fbff;
+}
+
+.stat-item h3{
+
+    font-size:2.5rem;
+
+    font-weight:800;
+
+    color:#0d6efd;
+}
+
+.stat-item p{
+
+    color:#6c757d;
+
+    margin:0;
+}
+
+
+/* Testimonials Section */
+
+.testimonials-section{
+
+    padding:120px 0;
+
+    background:#ffffff;
+}
+
+.section-header{
+
+    max-width:700px;
+
+    margin:0 auto 4rem;
+}
+
+
+.section-header h2{
+
+    font-size:3rem;
+
+    font-weight:800;
+
+    margin-bottom:1rem;
+}
+
+.section-header p{
+
+    color:#6c757d;
+
+    font-size:1.1rem;
+}
+
+.section-label{
+
+    color:#0d6efd;
+
+    font-weight:600;
+
+    letter-spacing:1px;
+
+    text-transform:uppercase;
+}
+
+.rating-summary{
+
+    text-align:center;
+
+    margin-bottom:4rem;
+}
+
+.rating-value{
+
+    font-size:3rem;
+
+    font-weight:800;
+
+    color:#0d6efd;
+}
+
+.rating-text{
+
+    color:#6c757d;
+}
+
+.testimonial-card{
+
+    height:100%;
+
+    background:#fff;
+
+    border:1px solid #e9ecef;
+
+    padding:2rem;
+
+    transition:.3s;
+}
+
+.testimonial-card:hover{
+
+    transform:translateY(-6px);
+
+    box-shadow:
+    0 15px 35px rgba(
+        0,
+        0,
+        0,
+        .08
+    );
+}
+
+.testimonial-rating{
+
+    margin-bottom:1rem;
+}
+
+.testimonial-rating i{
+
+    color:#0d6efd;
+
+    margin-right:4px;
+}
+
+/* Service Badge */
+
+.service-badge{
+
+    display:inline-block;
+
+    margin-bottom:1rem;
+
+    padding:6px 12px;
+
+    border:1px solid #0d6efd;
+
+    color:#0d6efd;
+
+    font-size:.85rem;
+
+    font-weight:600;
+}
+
+/* Testimonial Review */
+
+.testimonial-review{
+
+    color:#495057;
+
+    line-height:1.8;
+
+    min-height:120px;
+}
+
+/* Testimonial Footer */
+
+.testimonial-footer{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:1rem;
+
+    margin-top:2rem;
+}
+
+/* Testimonial Avatar */
+
+.testimonial-avatar{
+
+    width:50px;
+
+    height:50px;
+
+    background:#0d6efd;
+
+    color:white;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    font-weight:700;
+}
+
+.testimonial-avatar img{
+
+    width:100%;
+
+    height:100%;
+
+    object-fit:cover;
+}

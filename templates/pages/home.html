@@ -1,0 +1,108 @@
+{% extends "base/base.html" %}
+
+{% block title %}Home - CLEANEX{% endblock %}
+
+{% block content %}
+
+{% include "includes/hero.html" %}
+
+
+<!-- ================= TRUST BAR ================= -->
+<section class="py-4 border-top border-bottom bg-light trust-bar">
+  <div class="container text-center">
+
+    <div class="row">
+
+      <div class="col-md-3">
+        <strong>500+</strong><br>
+        Homes Cleaned
+      </div>
+
+      <div class="col-md-3">
+        <strong>100%</strong><br>
+        Satisfaction
+      </div>
+
+      <div class="col-md-3">
+        <strong>24/7</strong><br>
+        Availability
+      </div>
+
+      <div class="col-md-3">
+        <strong>Top Rated</strong><br>
+        Cleaners
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
+
+
+<!-- ================= SERVICES ================= -->
+<section class="section section-white">
+  <div class="container">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2>Our Services</h2>
+      <a href="/services/" class="btn btn-outline-primary btn-sm">View All</a>
+    </div>
+
+    <div class="services-grid">
+
+      {% for service in services %}
+        {% include "components/service_card.html" %}
+      {% empty %}
+        <p>No services available.</p>
+      {% endfor %}
+
+    </div>
+
+  </div>
+</section>
+
+<!-- ================= HOW IT WORKS ================= -->
+<section class="section section-light">
+
+    {% include "includes/how_it_works.html" %}
+
+</section>
+
+<!-- ================= WHY CHOOSE US ================= -->
+<section class="section section-white">
+
+    {% include "components/why_choose.html" %}
+
+</section>
+
+
+<!-- ================= TESTIMONIALS ================= -->
+<section class="section section-light">
+
+
+      {% for testimonial in testimonials %}
+        {% include "components/testimonial_card.html" %}
+      {% empty %}
+        <p class="text-center">No testimonials yet.</p>
+      {% endfor %}
+
+
+</section>
+
+
+<!-- ================= CTA ================= -->
+<section class="section section-dark text-center">
+  <div class="container">
+
+    <h2>Ready for a Cleaner Home?</h2>
+    <p class="mb-4">Book your cleaning service today and enjoy a spotless space.</p>
+
+    <a href="/book/" class="btn btn-success btn-lg">
+      Book a Cleaning Now
+    </a>
+
+  </div>
+</section>
+
+{% endblock %}

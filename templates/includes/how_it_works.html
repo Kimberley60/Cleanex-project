@@ -1,0 +1,53 @@
+<section class="how-it-works">
+
+    <div class="container">
+
+        <div class="section-header">
+
+            <span class="section-tag">
+                How It Works
+            </span>
+
+            <h2>
+                A Simple Process Designed Around You
+            </h2>
+
+            <p>
+                From booking to completion,
+                we make professional cleaning
+                effortless and stress-free.
+            </p>
+
+        </div>
+
+        <div class="process-timeline">
+
+            {% for step in process_steps %}
+
+            <div class="process-card {% cycle 'left' 'right' %}">
+
+                <div class="step-number">
+                    {{ step.step_number|stringformat:"02d" }}
+                </div>
+
+                <div class="step-icon">
+                    <i class="{{ step.icon }}"></i>
+                </div>
+
+                <h3>
+                    {{ step.title }}
+                </h3>
+
+                <p>
+                    {{ step.description }}
+                </p>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+</section>

@@ -1,0 +1,142 @@
+/* =========================
+   DESIGN TOKENS
+========================= */
+:root {
+
+    /* Brand */
+
+    --primary: #1E88E5;
+    --secondary: #1565C0;
+    --success: #43A047;
+    --danger: #E53935;
+
+    /* Neutral */
+
+    --white: #ffffff;
+    --light: #f8f9fa;
+    --gray: #6c757d;
+    --dark: #212529;
+
+    /* Backgrounds */
+
+    --white: #ffffff;
+    --section-bg: #f4f8fc;
+
+    /* Typography */
+
+    --font-primary: 'Inter', sans-serif;
+
+    /* Radius */
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+
+    /* Shadows */
+
+    --shadow-sm: 0 2px 6px rgba(0,0,0,.08);
+    --shadow-md: 0 4px 12px rgba(0,0,0,.12);
+
+    /* Spacing */
+    --section-padding: 80px;
+}
+
+
+/* =========================
+   GLOBAL RESET
+========================= */
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    color: var(--dark);
+    background: var(--white);
+}
+
+
+/* =========================
+   TYPOGRAPHY SYSTEM
+========================= */
+h1, h2, h3, h4 {
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+h1 { font-size: 2.5rem; }
+h2 { font-size: 2rem; }
+h3 { font-size: 1.4rem; }
+
+p {
+    color: var(--gray);
+    line-height: 1.6;
+}
+
+
+/* =========================
+   BUTTON SYSTEM
+========================= */
+.btn-primary {
+    background: var(--primary);
+    border: none ;
+    border-radius: var(--radius-sm) ;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark) ;
+}
+
+.btn-outline-primary {
+    border-radius: var(--radius-sm);
+}
+
+.btn-success {
+    background: var(--secondary) ;
+    border: none ;
+}
+
+.btn-success:hover {
+    background: var(--secondary-dark) ;
+}
+
+
+/* =========================
+   LAYOUT SYSTEM
+========================= */
+.section {
+    position: relative;
+    padding: 100px 0;
+}
+
+section:not(:last-child) {
+    border-bottom: 1px solid rgba(0,0,0,.04);
+}
+
+.section-white {
+    background: var(--white);
+}
+
+.section-light {
+    background: var(--section-bg);
+}
+
+
+/* =========================
+   CARD SYSTEM
+========================= */
+.card-clean {
+    border: none !important;
+    border-radius: var(--radius) !important;
+    box-shadow: var(--shadow-sm) !important;
+    transition: 0.3s ease !important;
+}
+
+.card-clean:hover {
+    box-shadow: var(--shadow-md) !important;
+    transform: translateY(-4px) !important;
+}
+
+
+/* =========================
+   NAVBAR
+========================= */
+
+
+

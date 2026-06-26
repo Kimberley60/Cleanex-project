@@ -1,0 +1,183 @@
+{% load static %}
+
+<section class="hero-section">
+
+    {% if hero_section %}
+
+    <!-- HERO CAROUSEL -->
+
+    <div
+        class="hero-carousel"
+        data-autoplay="{{ hero_section.autoplay|yesno:'true,false' }}"
+        data-speed="{{ hero_section.autoplay_speed }}"
+    >
+
+        {% for slide in hero_section.slides.all %}
+
+            {% if slide.is_active %}
+
+            <div class="hero-slide {% if forloop.first %}active{% endif %}">
+
+                {% if slide.image %}
+
+                <img
+                    src="{{ slide.image.url }}"
+                    alt="{{ slide.title }}"
+                    class="hero-image"
+                    loading="{% if forloop.first %}eager{% else %}lazy{% endif %}"
+                >
+
+                {% endif %}
+
+                <div class="hero-overlay">
+
+                    <div class="hero-content">
+
+                        <div class="hero-content-inner">
+
+                            {% if slide.title %}
+                            <h1 class="hero-title">
+                                {{ slide.title }}
+                            </h1>
+                            {% endif %}
+
+                            {% if slide.subtitle %}
+                            <p class="hero-subtitle">
+                                {{ slide.subtitle }}
+                            </p>
+                            {% endif %}
+
+                            <div class="hero-buttons">
+
+                                {% if slide.primary_button_text %}
+                                <a
+                                    href="{{ slide.primary_button_url }}"
+                                    class="btn btn-primary"
+                                >
+                                    {{ slide.primary_button_text }}
+                                </a>
+                                {% endif %}
+
+                                {% if slide.secondary_button_text %}
+                                <a
+                                    href="{{ slide.secondary_button_url }}"
+                                    class="btn btn-outline-light"
+                                >
+                                    {{ slide.secondary_button_text }}
+                                </a>
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            {% endif %}
+
+        {% endfor %}
+
+        <!-- Carousel Dots -->
+
+        <div class="hero-dots">
+
+            {% for slide in hero_section.slides.all %}
+
+                {% if slide.is_active %}
+
+                <button
+                    class="hero-dot {% if forloop.first %}active{% endif %}"
+                    type="button"
+                    aria-label="Slide {{ forloop.counter }}"
+                ></button>
+
+                {% endif %}
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+    {% elif service %}
+
+    <!-- SERVICE DETAIL HERO -->
+
+    <div class="hero-single">
+
+        {% if service.hero_image %}
+
+        <img
+            src="{{ service.hero_image.url }}"
+            alt="{{ service.name }}"
+            class="hero-image"
+            loading="eager"
+        >
+
+        {% endif %}
+
+        <div class="hero-overlay">
+
+            <div class="hero-content">
+
+                <div class="hero-content-inner">
+
+                    <h1 class="hero-title">
+
+                        {% if service.hero_title %}
+                            {{ service.hero_title }}
+                        {% else %}
+                            {{ service.name }}
+                        {% endif %}
+
+                    </h1>
+
+                    {% if service.hero_subtitle %}
+
+                    <p class="hero-subtitle">
+                        {{ service.hero_subtitle }}
+                    </p>
+
+                    {% endif %}
+
+                    <div class="hero-buttons">
+
+                        {% if service.primary_button_text %}
+
+                        <a
+                            href="{{ service.primary_button_url }}"
+                            class="btn btn-primary"
+                        >
+                            {{ service.primary_button_text }}
+                        </a>
+
+                        {% endif %}
+
+                        {% if service.secondary_button_text %}
+
+                        <a
+                            href="{{ service.secondary_button_url }}"
+                            class="btn btn-outline-light"
+                        >
+                            {{ service.secondary_button_text }}
+                        </a>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+</section>

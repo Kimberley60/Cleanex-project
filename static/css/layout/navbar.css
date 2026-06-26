@@ -1,0 +1,105 @@
+.navbar {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(0);
+
+    width: 95%;
+    max-width: 1400px;
+
+    z-index: 1000;
+
+    background: rgba(255, 255, 255, 0.08);
+
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    border-radius: 18px;
+
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+
+    transition:
+        transform 0.35s ease,
+        background 0.3s ease,
+        border-color 0.3s ease,
+        box-shadow 0.3s ease;
+
+    will-change: transform;
+}
+
+
+.navbar-hidden {
+    transform: translateX(-50%) translateY(-120%);
+}
+
+
+.navbar.scrolled {
+    background: rgba(10, 25, 50, 0.75);
+
+    border-color: rgba(255,255,255,0.1);
+
+    box-shadow:
+        0 10px 40px rgba(0,0,0,0.2);
+
+}
+
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.nav-links li {
+    list-style: none;
+}
+
+.nav-links a {
+    color: white;
+
+    font-weight: 500;
+
+    position: relative;
+
+    transition: .3s;
+    text-decoration: none;
+}
+
+.navbar .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+
+/* ==========================================
+   Underline animation
+========================================== */
+
+.nav-links a::after {
+    content: '';
+
+    position: absolute;
+
+    bottom: -6px;
+    left: 0;
+
+    width: 0;
+    height: 2px;
+
+    background: #00AEEF;
+
+    transition: width .3s ease;
+}
+
+.nav-links a:hover::after {
+    width: 100%;
+}
+
+

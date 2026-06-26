@@ -1,0 +1,29 @@
+/* ==========================================
+    NAV Premium CTA Button
+========================================== */
+
+.quote-btn {
+    background: linear-gradient(
+        135deg,
+        #00AEEF,
+        #0077cc
+    );
+
+    color: white;
+
+    padding: 12px 28px;
+
+    border-radius: 50px;
+
+    font-weight: 600;
+
+    transition: .3s ease;
+}
+
+.quote-btn:hover {
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 10px 20px rgba(0,174,239,.3);
+}
+

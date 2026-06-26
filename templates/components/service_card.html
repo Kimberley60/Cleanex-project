@@ -1,0 +1,64 @@
+<article class="service-card">
+
+    {% if service.image %}
+    <div class="service-image-wrapper">
+        <img
+            src="{{ service.image.url }}"
+            alt="{{ service.name }}"
+            class="service-image"
+        >
+    </div>
+    {% endif %}
+
+    <div class="service-content">
+
+        <div class="service-icon">
+
+            {% if service.icon %}
+                <i class="{{ service.icon }}"></i>
+            {% else %}
+                <i class="fa-solid fa-sparkles"></i>
+            {% endif %}
+
+        </div>
+
+        <h3 class="service-title">
+            {{ service.name }}
+        </h3>
+
+        <p class="service-description">
+            {% if service.short_description %}
+                {{ service.short_description }}
+            {% else %}
+                {{ service.description|truncatewords:20 }}
+            {% endif %}
+        </p>
+
+        <ul class="service-features">
+
+            {% for feature in service.features.all|slice:":3" %}
+                <li>{{ feature.title }}</li>
+            {% endfor %}
+
+        </ul>
+
+        <div class="service-card-footer">
+
+            <div class="service-price">
+                From
+                <span>KES {{ service.base_price }}</span>
+            </div>
+
+            <a href="{{ service.get_absolute_url }}"
+               class="service-link">
+
+                Learn More
+                <span>→</span>
+
+            </a>
+
+        </div>
+
+    </div>
+
+</article>
