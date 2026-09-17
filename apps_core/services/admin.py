@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Service, ServiceFeature, ExtraService
+from .models import Service, ServiceCategory, ServiceFeature, ExtraService
 
 
 # Register your models here.
@@ -9,10 +9,47 @@ class ServiceFeatureInline(admin.TabularInline):
     extra = 1
 
 
+@admin.register(ServiceCategory)
+class ServiceCategoryAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "name",
+        "slug",
+        "display_order",
+        "is_active",
+        "updated_at",
+    )
+
+    list_editable = (
+        "display_order",
+        "is_active",
+    )
+
+    list_filter = (
+        "is_active",
+    )
+
+    search_fields = (
+        "name",
+        "slug",
+        "description",
+    )
+
+    prepopulated_fields = {
+        "slug": ("name",),
+    }
+
+    ordering = (
+        "display_order",
+        "name",
+    )
+
+
 @admin.register(Service)
 class ServiceAdmin(admin.ModelAdmin):
     list_display = (
         "name",
+        "category",
         "base_price",
         "duration_hours",
         "is_active",
@@ -20,6 +57,7 @@ class ServiceAdmin(admin.ModelAdmin):
     )
 
     list_filter = (
+        "category",
         "is_active",
         "created_at",
     )
@@ -40,6 +78,5 @@ class ServiceAdmin(admin.ModelAdmin):
 class ExtraServiceAdmin(admin.ModelAdmin):
     list_display = ("name", "price")
     search_fields = ("name",)
-
 
 

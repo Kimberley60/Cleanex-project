@@ -146,3 +146,94 @@ class Testimonial(models.Model):
 
     def __str__(self):
         return self.customer_name
+
+
+# FAQ Category
+class FAQCategory(models.Model):
+
+    name = models.CharField(
+        max_length=100
+    )
+
+    slug = models.SlugField(
+        max_length=120,
+        unique=True
+    )
+
+    display_order = models.PositiveIntegerField(
+        default=0
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    class Meta:
+        verbose_name = "FAQ category"
+        verbose_name_plural = "FAQ categories"
+        ordering = ["display_order"]
+        indexes = [
+            models.Index(fields=["is_active", "display_order"]),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+# FAQ
+class FAQ(models.Model):
+
+    category = models.ForeignKey(
+        FAQCategory,
+        on_delete=models.SET_NULL,
+        related_name="faqs",
+        null=True,
+        blank=True
+    )
+
+    question = models.CharField(
+        max_length=255
+    )
+
+    answer = models.TextField()
+
+    display_order = models.PositiveIntegerField(
+        default=0
+    )
+
+    is_featured = models.BooleanField(
+        default=False
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    class Meta:
+        verbose_name = "FAQ"
+        verbose_name_plural = "FAQs"
+        ordering = ["display_order", "id"]
+        indexes = [
+            models.Index(fields=["is_active", "display_order"]),
+            models.Index(fields=["is_active", "is_featured", "display_order"]),
+            models.Index(fields=["category", "is_active", "display_order"]),
+        ]
+
+    def __str__(self):
+        return self.question

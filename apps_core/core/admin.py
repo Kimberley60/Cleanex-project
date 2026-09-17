@@ -1,5 +1,13 @@
 from django.contrib import admin
-from .models import WhyChooseSection,WhyChooseFeature,CompanyStatistic,TestimonialSection,Testimonial
+from .models import (
+    WhyChooseSection,
+    WhyChooseFeature,
+    CompanyStatistic,
+    TestimonialSection,
+    Testimonial,
+    FAQCategory,
+    FAQ,
+)
 
 
 @admin.register(WhyChooseSection)
@@ -56,4 +64,177 @@ class TestimonialAdmin(admin.ModelAdmin):
         "featured",
         "display_order",
         "is_active"
+    )
+
+
+class FAQInline(admin.StackedInline):
+    model = FAQ
+
+    extra = 0
+
+    fieldsets = (
+        (
+            "Content",
+            {
+                "fields": (
+                    "question",
+                    "answer",
+                )
+            },
+        ),
+        (
+            "Settings",
+            {
+                "fields": (
+                    "display_order",
+                    "is_featured",
+                    "is_active",
+                )
+            },
+        ),
+    )
+
+
+@admin.register(FAQCategory)
+class FAQCategoryAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "name",
+        "slug",
+        "display_order",
+        "is_active",
+        "updated_at",
+    )
+
+    list_filter = (
+        "is_active",
+    )
+
+    search_fields = (
+        "name",
+        "slug",
+    )
+
+    list_editable = (
+        "display_order",
+        "is_active",
+    )
+
+    prepopulated_fields = {
+        "slug": ("name",),
+    }
+
+    ordering = (
+        "display_order",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+    )
+
+    inlines = [
+        FAQInline,
+    ]
+
+    fieldsets = (
+        (
+            "Category Information",
+            {
+                "fields": (
+                    "name",
+                    "slug",
+                )
+            },
+        ),
+        (
+            "Display Settings",
+            {
+                "fields": (
+                    "display_order",
+                    "is_active",
+                )
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": (
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+
+@admin.register(FAQ)
+class FAQAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "question",
+        "category",
+        "is_featured",
+        "display_order",
+        "is_active",
+        "updated_at",
+    )
+
+    list_filter = (
+        "category",
+        "is_active",
+        "is_featured",
+    )
+
+    search_fields = (
+        "question",
+        "answer",
+    )
+
+    list_editable = (
+        "is_featured",
+        "display_order",
+        "is_active",
+    )
+
+    ordering = (
+        "display_order",
+        "id",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+    )
+
+    fieldsets = (
+        (
+            "Content",
+            {
+                "fields": (
+                    "category",
+                    "question",
+                    "answer",
+                )
+            },
+        ),
+        (
+            "Display Settings",
+            {
+                "fields": (
+                    "display_order",
+                    "is_featured",
+                    "is_active",
+                )
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": (
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
     )

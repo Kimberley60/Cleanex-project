@@ -1,0 +1,419 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %}Services - CLEANEX{% endblock %}
+
+{% block content %}
+
+<!-- ================= HERO ================= -->
+
+{% if hero_section %}
+
+
+{% include "includes/hero.html" %}
+
+
+{% else %}
+
+<header class="services-hero hero-section">
+
+
+            <div class="container">
+
+                <div class="hero-content-inner text-center">
+
+                    <h1 class="hero-title">
+                        Professional Cleaning Services
+                    </h1>
+
+                    <p class="hero-subtitle">
+                        Reliable, affordable, and tailored cleaning solutions for homes
+                        and businesses across Nairobi.
+                    </p>
+
+                    <div class="hero-buttons">
+
+                        <a href="{% url 'book' %}" class="btn btn-primary btn-lg">
+                            Book a Cleaning Now
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+</header>
+
+{% endif %}
+
+<!-- ================= SERVICE DISCOVERY ================= -->
+
+<section
+    class="services-discovery-section"
+    aria-labelledby="services-discovery-heading">
+
+
+            <div class="container">
+
+                <!-- Section Header -->
+                <header class="services-discovery-header">
+
+                    <span class="section-eyebrow">
+                        OUR SERVICES
+                    </span>
+
+                    <h2 id="services-discovery-heading">
+                        Find the Right Cleaning Service
+                    </h2>
+
+                    <p>
+                        Browse our cleaning services or search for exactly what you need.
+                    </p>
+
+                </header>
+
+
+                <!-- ================= SEARCH ================= -->
+                <form
+                    method="get"
+                    action="{% url 'services' %}"
+                    class="services-search-form"
+                    role="search">
+
+                    {% if active_category %}
+
+                        <input
+                            type="hidden"
+                            name="category"
+                            value="{{ active_category }}">
+
+                    {% endif %}
+
+
+                    <label
+                        for="service-search"
+                        class="visually-hidden">
+
+                        Search cleaning services
+
+                    </label>
+
+
+                    <div class="services-search-wrapper">
+
+                        <span
+                            class="services-search-icon"
+                            aria-hidden="true">
+
+                            <i class="fa-solid fa-magnifying-glass"></i>
+
+                        </span>
+
+
+                        <input
+                            type="search"
+                            id="service-search"
+                            name="search"
+                            value="{{ search_query }}"
+                            class="services-search-input"
+                            placeholder="Search cleaning services..."
+                            autocomplete="off">
+
+
+                        {% if search_query %}
+
+                            <button
+                                type="button"
+                                id="clear-service-search"
+                                class="services-search-clear"
+                                aria-label="Clear search">
+
+                                <i
+                                    class="fa-solid fa-xmark"
+                                    aria-hidden="true">
+                                </i>
+
+                            </button>
+
+                        {% endif %}
+
+
+                        <button
+                            type="submit"
+                            class="services-search-button">
+
+                            Search
+
+                        </button>
+
+                    </div>
+
+                </form>
+
+
+                <!-- ================= CATEGORY FILTER ================= -->
+                <nav
+                    class="services-filter-bar"
+                    aria-label="Filter services by category">
+
+                    <div class="services-filter-list">
+
+                        <!-- ALL SERVICES -->
+                        <a
+                            href="{% url 'services' %}{% if search_query %}?search={{ search_query|urlencode }}{% endif %}"
+                            class="services-filter-btn{% if not active_category %} active{% endif %}"
+                            {% if not active_category %}
+                                aria-current="page"
+                            {% endif %}>
+
+                            All Services
+
+                        </a>
+
+
+                        <!-- DYNAMIC CATEGORIES -->
+                        {% for category in categories %}
+
+                            <a
+                                href="{% url 'services' %}?category={{ category.slug }}{% if search_query %}&search={{ search_query|urlencode }}{% endif %}"
+                                class="services-filter-btn{% if active_category == category.slug %} active{% endif %}"
+                                {% if active_category == category.slug %}
+                                    aria-current="page"
+                                {% endif %}>
+
+                                {{ category.name }}
+
+                            </a>
+
+                        {% endfor %}
+
+                    </div>
+
+                </nav>
+
+
+                                <!-- ================= RESULT SUMMARY ================= -->
+                <div
+                    class="services-result-summary"
+                    aria-live="polite">
+
+                    {% if search_query and selected_category %}
+
+                        <p>
+                            Showing
+                            <strong>{{ result_count }}</strong>
+                            service{{ result_count|pluralize }}
+                            in
+                            <strong>{{ selected_category.name }}</strong>
+                            matching
+                            <strong>"{{ search_query }}"</strong>.
+                        </p>
+
+                    {% elif search_query %}
+
+                        <p>
+                            Showing
+                            <strong>{{ result_count }}</strong>
+                            service{{ result_count|pluralize }}
+                            matching
+                            <strong>"{{ search_query }}"</strong>.
+                        </p>
+
+                    {% elif selected_category %}
+
+                        <p>
+                            Showing
+                            <strong>{{ result_count }}</strong>
+                            service{{ result_count|pluralize }}
+                            in
+                            <strong>{{ selected_category.name }}</strong>.
+                        </p>
+
+                    {% else %}
+
+                        <p>
+                            Showing
+                            <strong>{{ result_count }}</strong>
+                            service{{ result_count|pluralize }}.
+                        </p>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+
+</section>
+
+<!-- ================= SERVICES GRID ================= -->
+
+<section
+    class="services-grid-section section section-white"
+    aria-labelledby="services-grid-heading">
+
+
+            <div class="container">
+
+                <header class="section-header text-center">
+
+                    <h2 id="services-grid-heading">
+                        Explore Our Services
+                    </h2>
+
+                    <p>
+                        Browse our full range of cleaning services and find the right
+                        fit for your space.
+                    </p>
+
+                </header>
+
+
+                {% if services %}
+
+                    <div class="row g-4 services-grid">
+
+                        {% for service in services %}
+
+                            <div class="col-md-6 col-lg-4">
+
+                                {% include "components/service_card.html" with service=service %}
+
+                            </div>
+
+                        {% endfor %}
+
+                    </div>
+
+
+                {% else %}
+
+                    <!-- ================= EMPTY STATE ================= -->
+                    <div
+                        class="services-empty-state"
+                        role="status">
+
+                        <div
+                            class="services-empty-icon"
+                            aria-hidden="true">
+
+                            <i class="fa-solid fa-magnifying-glass"></i>
+
+                        </div>
+
+
+                        <h3>
+                            No services found
+                        </h3>
+
+
+                        <p>
+                            Try a different search term or browse all of our
+                            cleaning services.
+                        </p>
+
+
+                        <a
+                            href="{% url 'services' %}"
+                            class="services-empty-button">
+
+                            View All Services
+
+                        </a>
+
+                    </div>
+
+                {% endif %}
+
+            </div>
+
+
+</section>
+
+
+<!-- ================= WHY CHOOSE US ================= -->
+
+<section class="section section-white">
+
+    {% include "components/why_choose.html" %}
+
+</section>
+
+
+
+<!-- ================= HOW IT WORKS ================= -->
+
+<section class="section section-white">
+
+    {% include "includes/how_it_works.html" %}
+
+</section>
+
+
+
+
+<!-- ================= TESTIMONIALS ================= -->
+
+<section class="section section-white">
+
+    {% include "components/testimonial_card.html" %}
+
+</section>
+
+
+
+<!-- ================= BOTTOM CTA ================= -->
+
+<section
+    class="services-cta section section-dark text-center"
+    aria-labelledby="services-cta-heading">
+
+
+            <div class="container">
+
+                <h2 id="services-cta-heading">
+                    Ready for a Cleaner Space?
+                </h2>
+
+                <p class="mb-4">
+                    Book your preferred service today or request a custom quote for
+                    your cleaning needs.
+                </p>
+
+
+                <div
+                    class="services-cta-actions d-flex flex-wrap justify-content-center gap-3">
+
+                    <a
+                        href="{% url 'book' %}"
+                        class="btn btn-success btn-lg">
+
+                        Book a Cleaning Now
+
+                    </a>
+
+
+                    <a
+                        href="{% url 'quote' %}"
+                        class="btn btn-outline-light btn-lg">
+
+                        Get a Quote
+
+                    </a>
+
+                </div>
+
+            </div>
+
+
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script src="{% static 'js/services.js' %}"></script>
+
+{% endblock %}

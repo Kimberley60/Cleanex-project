@@ -2,6 +2,46 @@ from django.db import models
 from django.urls import reverse
 
 
+class ServiceCategory(models.Model):
+
+    name = models.CharField(
+        max_length=100
+    )
+
+    slug = models.SlugField(
+        max_length=120,
+        unique=True
+    )
+
+    description = models.TextField(
+        blank=True
+    )
+
+    display_order = models.PositiveIntegerField(
+        default=0
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    class Meta:
+        verbose_name = "service category"
+        verbose_name_plural = "service categories"
+        ordering = ["display_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Service(models.Model):
     name = models.CharField(
         max_length=120
@@ -9,6 +49,14 @@ class Service(models.Model):
 
     slug = models.SlugField(
         unique=True
+    )
+
+    category = models.ForeignKey(
+        ServiceCategory,
+        on_delete=models.SET_NULL,
+        related_name="services",
+        null=True,
+        blank=True
     )
 
     # Card Description

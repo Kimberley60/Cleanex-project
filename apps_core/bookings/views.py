@@ -7,7 +7,7 @@ from .services import create_booking
 
 
 class BookingCreateView(View):
-    template_name = "pages/booking_form.html"
+    template_name = "components/booking_form.html"
 
     def get(self, request):
         services = Service.objects.filter(is_active=True)

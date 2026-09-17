@@ -1,0 +1,93 @@
+{% if faqs %}
+
+<section class="faq-section" aria-labelledby="faq-section-heading">
+
+    <div class="container">
+
+        <header class="section-header text-center">
+
+            <span class="section-tag">
+                FAQ
+            </span>
+
+            <h2 id="faq-section-heading">
+                Frequently Asked Questions
+            </h2>
+
+            <p>
+                Find answers to common questions about our cleaning services,
+                booking process, and what to expect from CLEANEX.
+            </p>
+
+        </header>
+
+
+        <div
+            class="accordion"
+            id="homepage-faq-accordion"
+            role="region"
+            aria-label="Frequently asked questions">
+
+            {% for faq in faqs %}
+
+            <div class="accordion-item">
+
+                <h3 class="accordion-header" id="faq-heading-{{ faq.id }}">
+
+                    <button
+                        class="accordion-button{% if not forloop.first %} collapsed{% endif %}"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#faq-collapse-{{ faq.id }}"
+                        aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}"
+                        aria-controls="faq-collapse-{{ faq.id }}">
+
+                        {{ faq.question }}
+
+                    </button>
+
+                </h3>
+
+                <div
+                    id="faq-collapse-{{ faq.id }}"
+                    class="accordion-collapse collapse{% if forloop.first %} show{% endif %}"
+                    aria-labelledby="faq-heading-{{ faq.id }}"
+                    data-bs-parent="#homepage-faq-accordion">
+
+                    <div class="accordion-body">
+
+                        {{ faq.answer|linebreaks }}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+
+        <aside class="faq-cta text-center" aria-labelledby="faq-cta-heading">
+
+            <h3 id="faq-cta-heading">
+                Still Have Questions?
+            </h3>
+
+            <p>
+                Our team is happy to help. Reach out and we will get back to you
+                as soon as possible.
+            </p>
+
+            <a href="{% url 'contact' %}" class="btn btn-outline-primary">
+                Contact Us
+            </a>
+
+        </aside>
+
+    </div>
+
+</section>
+
+{% endif %}

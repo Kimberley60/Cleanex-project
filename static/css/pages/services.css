@@ -1,0 +1,355 @@
+/* ==========================================
+   SERVICES LISTING PAGE
+========================================== */
+
+/* ==========================================
+   FALLBACK HERO
+   Reuses .hero-title / .hero-subtitle from hero.css
+========================================== */
+
+.services-hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    min-height: 58vh;
+
+    padding: 120px 0 90px;
+
+    background:
+        linear-gradient(
+            120deg,
+            rgba(0, 82, 163, 0.96) 0%,
+            rgba(0, 119, 204, 0.92) 42%,
+            rgba(0, 174, 239, 0.88) 100%
+        );
+}
+
+.services-hero .hero-content-inner {
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.services-hero .hero-subtitle {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.services-hero .hero-buttons {
+    justify-content: center;
+}
+
+
+/* ==========================================
+   CATEGORY FILTER BAR
+========================================== */
+
+.services-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+
+    padding: 1.25rem 0;
+
+    background: var(--white);
+
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+
+    box-shadow: var(--shadow-sm);
+}
+
+.services-filter-list {
+    justify-content: center;
+}
+
+a.services-filter-btn {
+    display: inline-block;
+    text-decoration: none;
+}
+
+.services-filter-btn {
+    appearance: none;
+
+    padding: 10px 22px;
+
+    border: 1px solid rgba(0, 174, 239, 0.22);
+    border-radius: 50px;
+
+    background: var(--white);
+    color: var(--secondary);
+
+    font-size: 0.92rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+
+    cursor: pointer;
+
+    transition:
+        background 0.25s ease,
+        color 0.25s ease,
+        border-color 0.25s ease,
+        box-shadow 0.25s ease,
+        transform 0.25s ease;
+}
+
+.services-filter-btn:hover {
+    border-color: rgba(0, 174, 239, 0.55);
+    color: #0077CC;
+    transform: translateY(-1px);
+}
+
+.services-filter-btn.active {
+    background:
+        linear-gradient(
+            135deg,
+            #00AEEF,
+            #0077CC
+        );
+
+    border-color: transparent;
+    color: var(--white);
+
+    box-shadow: 0 10px 22px rgba(0, 174, 239, 0.28);
+}
+
+.services-filter-btn:focus-visible {
+    outline: 2px solid #00AEEF;
+    outline-offset: 3px;
+}
+
+
+/* ==========================================
+   GRID SECTION
+   Homepage .services-grid is CSS Grid.
+   Listing uses Bootstrap columns — restore flex.
+========================================== */
+
+.services-grid-section {
+    padding-top: 80px;
+}
+
+.services-grid-section .section-header {
+    margin-bottom: 3rem;
+}
+
+.services-grid-section .services-grid.row {
+    display: flex;
+}
+
+.services-grid-section .col-md-6,
+.services-grid-section .col-lg-4 {
+    display: flex;
+}
+
+
+/* ==========================================
+   LISTING CARD ENHANCEMENTS
+   Core card, image scale, and hover live in
+   static/css/components/service_card.css
+========================================== */
+
+.services-grid-section .service-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+.services-grid-section .service-image-wrapper {
+    margin: 0;
+}
+
+.services-grid-section .service-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.services-grid-section .service-title {
+    margin-bottom: 0.75rem;
+}
+
+.service-category-badge {
+    display: inline-block;
+
+    width: fit-content;
+
+    margin-bottom: 1rem;
+    padding: 5px 12px;
+
+    border: 1px solid rgba(0, 174, 239, 0.35);
+    border-radius: 50px;
+
+    color: #0077CC;
+    background: rgba(0, 174, 239, 0.08);
+
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.services-grid-section .service-price {
+    margin-top: auto;
+    margin-bottom: 1.25rem;
+
+    font-size: 0.9rem;
+    color: var(--gray);
+}
+
+.services-grid-section .service-price strong {
+    display: block;
+
+    margin-top: 4px;
+
+    color: #00AEEF;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.service-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+
+    margin-top: 0.25rem;
+}
+
+.service-card-actions .btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+
+/* ==========================================
+   FILTER FADE SUPPORT
+   JS toggles opacity/display on column wrappers
+========================================== */
+
+.services-grid-section [class*="col-"] {
+    will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .services-filter-btn,
+    .services-grid-section .service-card,
+    .services-grid-section .service-image {
+        transition: none;
+    }
+
+}
+
+
+/* ==========================================
+   BOTTOM CTA
+========================================== */
+
+.section-dark,
+.services-cta {
+    background:
+        linear-gradient(
+            135deg,
+            #0b2c4a 0%,
+            #0052a3 58%,
+            #0077CC 100%
+        );
+
+    color: var(--white);
+}
+
+.services-cta h2 {
+    color: var(--white);
+    font-weight: 700;
+}
+
+.services-cta p {
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.services-cta-actions .btn-outline-light:hover {
+    color: #0052a3;
+}
+
+
+/* ==========================================
+   TABLET
+========================================== */
+
+@media (max-width: 992px) {
+
+    .services-hero {
+        min-height: 48vh;
+        padding: 100px 0 72px;
+    }
+
+    .services-filter-bar {
+        position: static;
+    }
+
+    .services-grid-section {
+        padding-top: 64px;
+    }
+
+}
+
+
+/* ==========================================
+   MOBILE
+========================================== */
+
+@media (max-width: 768px) {
+
+    .services-hero {
+        min-height: auto;
+        padding: 88px 0 56px;
+        text-align: center;
+    }
+
+    .services-hero .hero-buttons {
+        align-items: stretch;
+    }
+
+    .services-hero .hero-buttons .btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    .services-filter-bar {
+        padding: 1rem 0;
+    }
+
+    .services-filter-list {
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 0.35rem;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .services-filter-btn {
+        white-space: nowrap;
+        padding: 8px 16px;
+        font-size: 0.85rem;
+    }
+
+    .services-grid-section .section-header h2 {
+        font-size: 2rem;
+    }
+
+    .service-card-actions {
+        flex-direction: column;
+    }
+
+    .service-card-actions .btn {
+        width: 100%;
+    }
+
+    .services-cta {
+        padding: 72px 0;
+    }
+
+}

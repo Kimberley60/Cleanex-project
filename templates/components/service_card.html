@@ -1,13 +1,19 @@
-<article class="service-card">
+<article
+    class="service-card"
+    data-category="{% if service.category %}{{ service.category.slug }}{% else %}uncategorized{% endif %}">
 
     {% if service.image %}
-    <div class="service-image-wrapper">
+
+    <figure class="service-image-wrapper">
+
         <img
             src="{{ service.image.url }}"
             alt="{{ service.name }}"
             class="service-image"
-        >
-    </div>
+            loading="lazy">
+
+    </figure>
+
     {% endif %}
 
     <div class="service-content">
@@ -15,9 +21,13 @@
         <div class="service-icon">
 
             {% if service.icon %}
-                <i class="{{ service.icon }}"></i>
+
+            <i class="{{ service.icon }}" aria-hidden="true"></i>
+
             {% else %}
-                <i class="fa-solid fa-sparkles"></i>
+
+            <i class="fa-solid fa-sparkles" aria-hidden="true"></i>
+
             {% endif %}
 
         </div>
@@ -26,38 +36,54 @@
             {{ service.name }}
         </h3>
 
+        {% if service.category %}
+
+        <span class="service-category-badge">
+            {{ service.category.name }}
+        </span>
+
+        {% endif %}
+
         <p class="service-description">
+
             {% if service.short_description %}
+
                 {{ service.short_description }}
+
             {% else %}
+
                 {{ service.description|truncatewords:20 }}
+
             {% endif %}
+
         </p>
 
-        <ul class="service-features">
+        <p class="service-price">
 
-            {% for feature in service.features.all|slice:":3" %}
-                <li>{{ feature.title }}</li>
-            {% endfor %}
+            Starting from
+            <strong>KES {{ service.base_price }}</strong>
 
-        </ul>
+        </p>
 
-        <div class="service-card-footer">
+        <footer class="service-card-actions">
 
-            <div class="service-price">
-                From
-                <span>KES {{ service.base_price }}</span>
-            </div>
-
-            <a href="{{ service.get_absolute_url }}"
-               class="service-link">
+            <a
+                href="{{ service.get_absolute_url }}"
+                class="btn btn-outline-primary">
 
                 Learn More
-                <span>→</span>
 
             </a>
 
-        </div>
+            <a
+                href="{{ service.primary_button_url }}"
+                class="btn btn-primary">
+
+                {{ service.primary_button_text }}
+
+            </a>
+
+        </footer>
 
     </div>
 

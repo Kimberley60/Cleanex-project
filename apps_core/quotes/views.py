@@ -6,7 +6,7 @@ from .services import calculate_quote
 
 class QuoteView(View):
 
-    template_name = "quotes/quote_form.html"
+    template_name = "components/quote_form.html"
 
     def get(self, request):
         services = Service.objects.filter(is_active=True)
