@@ -1,5 +1,5 @@
-
 from pathlib import Path
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 
@@ -16,6 +16,39 @@ SECRET_KEY = 'django-insecure-#69j%959-_rnnu!9j+l4xyrnffc!ac3v87(sc3d8mnvn=8r=v6
 DEBUG = True
 
 ALLOWED_HOSTS = []
+
+
+# M-Pesa / Daraja configuration
+
+MPESA_CONSUMER_KEY = config(
+    "MPESA_CONSUMER_KEY",
+    default="",
+)
+
+MPESA_CONSUMER_SECRET = config(
+    "MPESA_CONSUMER_SECRET",
+    default="",
+)
+
+MPESA_SHORTCODE = config(
+    "MPESA_SHORTCODE",
+    default="",
+)
+
+MPESA_PASSKEY = config(
+    "MPESA_PASSKEY",
+    default="",
+)
+
+MPESA_CALLBACK_URL = config(
+    "MPESA_CALLBACK_URL",
+    default="",
+)
+
+MPESA_ENVIRONMENT = config(
+    "MPESA_ENVIRONMENT",
+    default="sandbox",
+)
 
 
 # Application definition
@@ -35,8 +68,8 @@ INSTALLED_APPS = [
     'apps_core.staff',
     'apps_core.quotes',
     'apps_core.gallery',
-    'apps_core.website'
-
+    'apps_core.website',
+    'apps_core.payments',
 ]
 
 MIDDLEWARE = [
@@ -56,7 +89,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR/'templates'],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -79,20 +112,18 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'cleanex_db',
         'USER': 'cleanex_user',
         'PASSWORD': 'cleanex123',
         'HOST': 'localhost',
         'PORT': '5432',
-
-
     }
 }
 
 
 # Password validation
+
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -107,16 +138,12 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-
-
     },
-
-
 ]
 
 
-
 # Internationalization
+
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
@@ -128,17 +155,14 @@ USE_I18N = True
 USE_TZ = True
 
 
-
 # Static files (CSS, JavaScript, Images)
+
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
-
-
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
 
-
-
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / "media"
+

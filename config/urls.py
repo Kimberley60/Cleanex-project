@@ -20,6 +20,8 @@ urlpatterns = [
     # gallery
     path("", include("apps_core.gallery.urls")),
 
+    path("payments/", include("apps_core.payments.urls")),
+
 
 
 ]

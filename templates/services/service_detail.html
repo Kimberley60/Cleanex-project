@@ -1,10 +1,586 @@
 {% extends "base/base.html" %}
 {% load static %}
 
-{% block title %}{{ service.name }}{% endblock %}
+{% block title %}{{ service.name }} | CLEANEX{% endblock %}
+
 
 {% block content %}
 
+
+
+<!-- =========================================================
+     SERVICE HERO
+========================================================= -->
+
+
+
 {% include "includes/hero.html" %}
 
+
+<!-- =========================================================
+     SERVICE INTERNAL NAVIGATION
+========================================================= -->
+<nav
+    class="service-detail-nav"
+    aria-label="Service page navigation"
+>
+    <div class="container">
+        <div class="service-detail-nav__inner">
+
+            <a href="#overview">
+                Overview
+            </a>
+
+            <a href="#included">
+                What's Included
+            </a>
+
+            <a href="#pricing">
+                Pricing
+            </a>
+
+            {% if service_faqs %}
+                <a href="#faqs">
+                    FAQs
+                </a>
+            {% endif %}
+
+        </div>
+    </div>
+</nav>
+
+
+<!-- =========================================================
+     SERVICE OVERVIEW
+========================================================= -->
+<section
+    id="overview"
+    class="service-detail-section service-detail-section--light"
+>
+    <div class="container">
+
+        <div class="row g-5 align-items-start">
+
+            <div class="col-lg-7">
+
+                <div class="service-detail-section__heading">
+
+                    <span class="section-eyebrow">
+                        About the service
+                    </span>
+
+                    <h2>
+                        Professional {{ service.name }}
+                    </h2>
+
+                </div>
+
+                <div class="service-detail-overview__description">
+                    {{ service.description|linebreaks }}
+                </div>
+
+            </div>
+
+
+
+            <!-- SERVICE DETAILS -->
+            <div class="col-lg-5">
+
+                <aside class="service-detail-info">
+
+                    <div class="service-detail-info__header">
+                        <span class="section-eyebrow">
+                            Service details
+                        </span>
+
+                        <h3>
+                            At a glance
+                        </h3>
+                    </div>
+
+
+                    {% if service.category %}
+                        <div class="service-detail-info__item">
+                            <span class="service-detail-info__label">
+                                Category
+                            </span>
+
+                            <span class="service-detail-info__value">
+                                {{ service.category.name }}
+                            </span>
+                        </div>
+                    {% endif %}
+
+
+                    <div class="service-detail-info__item">
+                        <span class="service-detail-info__label">
+                            Starting price
+                        </span>
+
+                        <span class="service-detail-info__value">
+                            KSh {{ service.base_price|floatformat:2 }}
+                        </span>
+                    </div>
+
+
+                    {% if service.price_per_hour %}
+                        <div class="service-detail-info__item">
+                            <span class="service-detail-info__label">
+                                Hourly rate
+                            </span>
+
+                            <span class="service-detail-info__value">
+                                KSh {{ service.price_per_hour|floatformat:2 }}/hr
+                            </span>
+                        </div>
+                    {% endif %}
+
+
+                    <div class="service-detail-info__item">
+                        <span class="service-detail-info__label">
+                            Estimated duration
+                        </span>
+
+                        <span class="service-detail-info__value">
+                            {{ service.duration_hours }} hours
+                        </span>
+                    </div>
+
+                </aside>
+
+            </div>
+
+        </div>
+
+    </div>
+</section>
+
+
+<!-- =========================================================
+     WHAT'S INCLUDED
+========================================================= -->
+<section
+    id="included"
+    class="service-detail-section service-detail-section--blue"
+>
+    <div class="container">
+
+        <div class="service-detail-section__heading service-detail-section__heading--center">
+
+            <span class="section-eyebrow">
+                What's included
+            </span>
+
+            <h2>
+                What you can expect
+            </h2>
+
+            <p>
+                Every service is delivered according to the specific
+                requirements of your space.
+            </p>
+
+        </div>
+
+
+        {% if service_features %}
+
+            <div class="service-features-grid">
+
+                {% for feature in service_features %}
+
+                    {% include "components/service_feature.html" with feature=feature %}
+
+                {% endfor %}
+
+            </div>
+
+        {% else %}
+
+            <div class="service-detail-empty">
+                <p>
+                    Service details are being updated. Please contact
+                    CLEANEX for more information.
+                </p>
+            </div>
+
+        {% endif %}
+
+    </div>
+</section>
+
+
+<!-- =========================================================
+     WHY CLEANEX
+========================================================= -->
+<section
+    class="service-detail-section service-detail-section--light"
+>
+    <div class="container">
+
+        <div class="service-detail-section__heading service-detail-section__heading--center">
+
+            <span class="section-eyebrow">
+                The CLEANEX standard
+            </span>
+
+            <h2>
+                Cleaning built around your needs
+            </h2>
+
+            <p>
+                We focus on reliable service, attention to detail and
+                a professional experience from booking to completion.
+            </p>
+
+        </div>
+
+
+        <div class="row g-4">
+
+            <div class="col-md-4">
+                <article class="service-benefit">
+                    <div class="service-benefit__icon">
+                        <i
+                            class="fa-solid fa-shield-halved"
+                            aria-hidden="true"
+                        ></i>
+                    </div>
+
+                    <h3>
+                        Professional standards
+                    </h3>
+
+                    <p>
+                        A structured approach designed to deliver
+                        consistent cleaning results.
+                    </p>
+                </article>
+            </div>
+
+
+            <div class="col-md-4">
+                <article class="service-benefit">
+                    <div class="service-benefit__icon">
+                        <i
+                            class="fa-solid fa-clock"
+                            aria-hidden="true"
+                        ></i>
+                    </div>
+
+                    <h3>
+                        Convenient service
+                    </h3>
+
+                    <p>
+                        Flexible service options designed around
+                        your property's requirements.
+                    </p>
+                </article>
+            </div>
+
+
+            <div class="col-md-4">
+                <article class="service-benefit">
+                    <div class="service-benefit__icon">
+                        <i
+                            class="fa-solid fa-sparkles"
+                            aria-hidden="true"
+                        ></i>
+                    </div>
+
+                    <h3>
+                        Attention to detail
+                    </h3>
+
+                    <p>
+                        Careful cleaning focused on the areas that
+                        matter most to you.
+                    </p>
+                </article>
+            </div>
+
+        </div>
+
+    </div>
+</section>
+
+
+<!-- =========================================================
+     HOW IT WORKS
+========================================================= -->
+{% if process_steps %}
+<section
+    class="service-detail-section service-detail-section--blue"
+>
+    <div class="container">
+
+        <div class="service-detail-section__heading service-detail-section__heading--center">
+
+            <span class="section-eyebrow">
+                How it works
+            </span>
+
+            <h2>
+                A simple booking process
+            </h2>
+
+        </div>
+
+
+        <div class="service-process">
+
+            {% for step in process_steps %}
+
+                <article class="service-process__step">
+
+                    <div class="service-process__number">
+                        {{ forloop.counter|stringformat:"02d" }}
+                    </div>
+
+                    <div class="service-process__content">
+
+                        {% if step.title %}
+                            <h3>
+                                {{ step.title }}
+                            </h3>
+                        {% endif %}
+
+                        {% if step.description %}
+                            <p>
+                                {{ step.description }}
+                            </p>
+                        {% endif %}
+
+                    </div>
+
+                </article>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+</section>
+{% endif %}
+
+
+<!-- =========================================================
+     PRICING
+========================================================= -->
+<section
+    id="pricing"
+    class="service-detail-section service-detail-section--light"
+>
+    <div class="container">
+
+        <div class="row justify-content-center">
+
+            <div class="col-lg-9">
+
+                <div class="service-pricing">
+
+                    <div class="service-pricing__content">
+
+                        <span class="section-eyebrow">
+                            Pricing
+                        </span>
+
+                        <h2>
+                            {{ service.name }}
+                        </h2>
+
+                        <p>
+                            Prices start from the amount below. Your final
+                            booking price can depend on property size,
+                            rooms and any additional services selected.
+                        </p>
+
+                    </div>
+
+
+                    <div class="service-pricing__amount">
+
+                        <span>
+                            From
+                        </span>
+
+                        <strong>
+                            KSh {{ service.base_price|floatformat:2 }}
+                        </strong>
+
+                    </div>
+
+
+                    <div class="service-pricing__action">
+
+                        <a
+                            href="{{ service.primary_button_url }}"
+                            class="btn btn-primary"
+                        >
+                            {{ service.primary_button_text|default:"Book Now" }}
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</section>
+
+
+<!-- =========================================================
+     SERVICE FAQ
+========================================================= -->
+{% if service_faqs %}
+<section
+    id="faqs"
+    class="service-detail-section service-detail-section--blue"
+>
+    <div class="container">
+
+        <div class="service-detail-section__heading service-detail-section__heading--center">
+
+            <span class="section-eyebrow">
+                Frequently asked questions
+            </span>
+
+            <h2>
+                {{ service.name }} FAQs
+            </h2>
+
+            <p>
+                Answers to common questions about this service.
+            </p>
+
+        </div>
+
+
+        <div
+            class="accordion service-faqs"
+            id="serviceFaqAccordion"
+        >
+
+            {% for faq in service_faqs %}
+
+                {% include "components/service_faq.html" with faq=faq index=forloop.counter %}
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+</section>
+{% endif %}
+
+
+<!-- =========================================================
+     RELATED SERVICES
+========================================================= -->
+{% if related_services %}
+<section
+    class="service-detail-section service-detail-section--light"
+>
+    <div class="container">
+
+        <div class="service-detail-section__heading">
+
+            <span class="section-eyebrow">
+                Explore more
+            </span>
+
+            <h2>
+                Related services
+            </h2>
+
+            <p>
+                Explore other CLEANEX services that may suit your needs.
+            </p>
+
+        </div>
+
+
+        <div class="row g-4">
+
+            {% for related_service in related_services %}
+
+                <div class="col-md-6 col-lg-4">
+
+                    {% include "components/service_card.html" with service=related_service %}
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+</section>
+{% endif %}
+
+
+<!-- =========================================================
+     FINAL CTA
+========================================================= -->
+<section class="service-detail-cta">
+
+    <div class="container">
+
+        <div class="service-detail-cta__inner">
+
+            <div class="service-detail-cta__content">
+
+                <span class="section-eyebrow">
+                    Ready to get started?
+                </span>
+
+                <h2>
+                    Book {{ service.name }} with CLEANEX
+                </h2>
+
+                <p>
+                    Tell us about your cleaning requirements and
+                    we'll help you choose the right service option.
+                </p>
+
+            </div>
+
+
+            <div class="service-detail-cta__actions">
+
+                <a
+                    href="{{ service.primary_button_url }}"
+                    class="btn btn-primary"
+                >
+                    {{ service.primary_button_text|default:"Book Now" }}
+                </a>
+
+                <a
+                    href="{% url 'services' %}"
+                    class="btn btn-outline-light"
+                >
+                    View All Services
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
 {% endblock %}
+
+
+{% block extra_js %}
+    <script
+        src="{% static 'js/service_detail.js' %}"
+        defer
+    ></script>
+{% endblock %}
+

@@ -1,0 +1,399 @@
+{% extends "base/base.html" %}
+
+{% block title %}Track Your Booking | CLEANEX{% endblock %}
+
+{% block content %}
+
+<section class="booking-track-page py-5">
+
+    <div class="container">
+
+        <div class="row justify-content-center">
+
+            <div class="col-lg-8 col-xl-7">
+
+                <!-- =====================================================
+                     PAGE HEADER
+                     ===================================================== -->
+
+                <div class="booking-track-header text-center mb-5">
+
+                    <span class="booking-eyebrow">
+                        CLEANEX BOOKING
+                    </span>
+
+                    <h1 class="booking-title">
+                        Track Your Booking
+                    </h1>
+
+                    <p class="booking-subtitle">
+                        Enter your booking reference and email address
+                        to view your latest booking status.
+                    </p>
+
+                </div>
+
+
+                <!-- =====================================================
+                     TRACKING FORM
+                     ===================================================== -->
+
+                <div class="booking-card">
+
+                    {% if form.non_field_errors %}
+
+                        <div
+                            class="alert alert-danger"
+                            role="alert"
+                        >
+                            {{ form.non_field_errors }}
+                        </div>
+
+                    {% endif %}
+
+
+                    <form method="post" novalidate>
+
+                        {% csrf_token %}
+
+
+                        <!-- BOOKING REFERENCE -->
+
+                        <div class="mb-4">
+
+                            <label
+                                for="{{ form.booking_reference.id_for_label }}"
+                                class="form-label"
+                            >
+                                {{ form.booking_reference.label }}
+                            </label>
+
+                            {{ form.booking_reference }}
+
+                            {% for error in form.booking_reference.errors %}
+
+                                <div class="invalid-feedback d-block">
+                                    {{ error }}
+                                </div>
+
+                            {% endfor %}
+
+                            <div class="form-text">
+                                Example: CLX-000123
+                            </div>
+
+                        </div>
+
+
+                        <!-- EMAIL -->
+
+                        <div class="mb-4">
+
+                            <label
+                                for="{{ form.email.id_for_label }}"
+                                class="form-label"
+                            >
+                                {{ form.email.label }}
+                            </label>
+
+                            {{ form.email }}
+
+                            {% for error in form.email.errors %}
+
+                                <div class="invalid-feedback d-block">
+                                    {{ error }}
+                                </div>
+
+                            {% endfor %}
+
+                        </div>
+
+
+                        <!-- SUBMIT -->
+
+                        <button
+                            type="submit"
+                            class="btn btn-primary w-100"
+                        >
+                            <span>
+                                Track Booking
+                            </span>
+
+                            <i
+                                class="fa-solid fa-arrow-right"
+                                aria-hidden="true"
+                            ></i>
+                        </button>
+
+                    </form>
+
+                </div>
+
+
+                <!-- =====================================================
+                     BOOKING RESULT
+                     ===================================================== -->
+
+                {% if booking %}
+
+                    <div class="booking-card mt-4">
+
+                        <div class="booking-track-result">
+
+
+                            <!-- BOOKING HEADER -->
+
+                            <div class="text-center mb-4">
+
+                                <span class="booking-eyebrow">
+                                    BOOKING FOUND
+                                </span>
+
+                                <h2 class="h3 mt-2">
+                                    {{ booking.booking_reference }}
+                                </h2>
+
+                                <p class="mb-0">
+                                    {{ booking.service.name }}
+                                </p>
+
+                            </div>
+
+
+                            <!-- =================================================
+                                 CURRENT STATUS
+                                 ================================================= -->
+
+                            {% if booking.status == "cancelled" %}
+
+                                <div
+                                    class="booking-status-box booking-status-cancelled text-center mb-5"
+                                >
+
+                                    <span class="small text-uppercase">
+                                        Current Status
+                                    </span>
+
+                                    <h3 class="h4 mt-2 mb-0">
+                                        Booking Cancelled
+                                    </h3>
+
+                                </div>
+
+                            {% else %}
+
+                                <div
+                                    class="booking-status-box text-center mb-5"
+                                >
+
+                                    <span class="small text-uppercase">
+                                        Current Status
+                                    </span>
+
+                                    <h3 class="h4 mt-2 mb-0">
+                                        {{ booking.get_status_display }}
+                                    </h3>
+
+                                </div>
+
+                            {% endif %}
+
+
+                            <!-- =================================================
+                                 BOOKING TIMELINE
+                                 ================================================= -->
+
+                            <div class="booking-timeline">
+
+                                {% for item in timeline %}
+
+                                    <div
+                                        class="booking-timeline-item {{ item.state }}"
+                                    >
+
+                                        <!-- TIMELINE MARKER -->
+
+                                        <div class="booking-timeline-marker">
+
+                                            {% if item.state == "completed" %}
+
+                                                <i
+                                                    class="fa-solid fa-check"
+                                                    aria-hidden="true"
+                                                ></i>
+
+                                            {% elif item.state == "cancelled" %}
+
+                                                <i
+                                                    class="fa-solid fa-xmark"
+                                                    aria-hidden="true"
+                                                ></i>
+
+                                            {% else %}
+
+                                                <span></span>
+
+                                            {% endif %}
+
+                                        </div>
+
+
+                                        <!-- TIMELINE CONTENT -->
+
+                                        <div class="booking-timeline-content">
+
+                                            <span class="booking-timeline-label">
+                                                {{ item.label }}
+                                            </span>
+
+                                            {% if item.state == "current" %}
+
+                                                <span class="booking-timeline-current">
+                                                    Current status
+                                                </span>
+
+                                            {% endif %}
+
+                                        </div>
+
+                                    </div>
+
+                                {% endfor %}
+
+                            </div>
+
+
+                            <!-- =================================================
+                                 BOOKING DETAILS
+                                 ================================================= -->
+
+                            <div class="row g-4 mt-4">
+
+
+                                <!-- SERVICE -->
+
+                                <div class="col-md-6">
+
+                                    <div class="booking-detail-item">
+
+                                        <span class="booking-detail-label">
+                                            Service
+                                        </span>
+
+                                        <strong>
+                                            {{ booking.service.name }}
+                                        </strong>
+
+                                    </div>
+
+                                </div>
+
+
+                                <!-- DATE -->
+
+                                <div class="col-md-6">
+
+                                    <div class="booking-detail-item">
+
+                                        <span class="booking-detail-label">
+                                            Date
+                                        </span>
+
+                                        <strong>
+                                            {{ booking.booking_date|date:"d M Y" }}
+                                        </strong>
+
+                                    </div>
+
+                                </div>
+
+
+                                <!-- TIME -->
+
+                                <div class="col-md-6">
+
+                                    <div class="booking-detail-item">
+
+                                        <span class="booking-detail-label">
+                                            Time
+                                        </span>
+
+                                        <strong>
+                                            {{ booking.booking_time|time:"g:i A" }}
+                                        </strong>
+
+                                    </div>
+
+                                </div>
+
+
+                                <!-- LOCATION -->
+
+                                <div class="col-md-6">
+
+                                    <div class="booking-detail-item">
+
+                                        <span class="booking-detail-label">
+                                            Location
+                                        </span>
+
+                                        <strong>
+                                            {{ booking.city }}
+                                        </strong>
+
+                                    </div>
+
+                                </div>
+
+
+                                <!-- TOTAL PRICE -->
+
+                                <div class="col-12">
+
+                                    <div class="booking-detail-item">
+
+                                        <span class="booking-detail-label">
+                                            Total Price
+                                        </span>
+
+                                        <strong>
+                                            KSh {{ booking.total_price|floatformat:2 }}
+                                        </strong>
+
+                                    </div>
+
+                                </div>
+
+
+                            </div>
+                            <!-- END BOOKING DETAILS -->
+
+
+                        </div>
+                        <!-- END BOOKING TRACK RESULT -->
+
+
+                    </div>
+                    <!-- END BOOKING CARD -->
+
+                {% endif %}
+                <!-- END BOOKING RESULT -->
+
+
+            </div>
+            <!-- END COLUMN -->
+
+
+        </div>
+        <!-- END ROW -->
+
+
+    </div>
+    <!-- END CONTAINER -->
+
+
+</section>
+<!-- END BOOKING TRACK PAGE -->
+
+
+{% endblock %}

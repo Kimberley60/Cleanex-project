@@ -113,6 +113,60 @@ class ServiceDetailView(DetailView):
     slug_url_kwarg = "slug"
 
     def get_queryset(self):
-        return Service.objects.filter(
-            is_active=True
+        return (
+            Service.objects
+            .filter(
+                is_active=True,
+            )
+            .select_related(
+                "category",
+            )
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        service = self.object
+
+        context["service_features"] = (
+            service.features
+            .filter(
+                is_active=True,
+            )
+            .order_by(
+                "display_order",
+                "id",
+            )
+        )
+
+        context["service_faqs"] = (
+            service.faqs
+            .filter(
+                is_active=True,
+            )
+            .order_by(
+                "display_order",
+                "id",
+            )
+        )
+
+        if service.category:
+            context["related_services"] = (
+                Service.objects
+                .filter(
+                    is_active=True,
+                    category=service.category,
+                )
+                .exclude(
+                    pk=service.pk,
+                )
+                .select_related(
+                    "category",
+                )[:3]
+            )
+        else:
+            context["related_services"] = Service.objects.none()
+
+        return context
+
+

@@ -187,13 +187,97 @@ class ServiceFeature(models.Model):
     service = models.ForeignKey(
         Service,
         on_delete=models.CASCADE,
-        related_name="features"
+        related_name="features",
     )
 
-    title = models.CharField(max_length=255)
+    title = models.CharField(
+        max_length=255,
+    )
+
+    description = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    icon = models.CharField(
+        max_length=100,
+        blank=True,
+        default="fa-solid fa-check",
+        help_text="Font Awesome class. Example: fa-solid fa-check",
+    )
+
+    display_order = models.PositiveIntegerField(
+        default=0,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        indexes = [
+            models.Index(
+                fields=[
+                    "service",
+                    "is_active",
+                    "display_order",
+                ]
+            ),
+        ]
 
     def __str__(self):
         return f"{self.service.name} - {self.title}"
+
+
+# ==========================================
+# ServiceFAQ
+# ==========================================
+
+class ServiceFAQ(models.Model):
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.CASCADE,
+        related_name="faqs",
+    )
+
+    question = models.CharField(
+        max_length=255,
+    )
+
+    answer = models.TextField()
+
+    display_order = models.PositiveIntegerField(
+        default=0,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        indexes = [
+            models.Index(
+                fields=[
+                    "service",
+                    "is_active",
+                    "display_order",
+                ]
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.service.name} - {self.question}"
+
 
 
 # ==========================================

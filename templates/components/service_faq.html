@@ -1,0 +1,38 @@
+<div class="accordion-item service-faq">
+
+    <h3
+        class="accordion-header"
+        id="service-faq-heading-{{ index }}"
+    >
+
+        <button
+            class="accordion-button collapsed service-faq__question"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#service-faq-answer-{{ index }}"
+            aria-expanded="false"
+            aria-controls="service-faq-answer-{{ index }}"
+        >
+            {{ faq.question }}
+        </button>
+
+    </h3>
+
+
+    <div
+        id="service-faq-answer-{{ index }}"
+        class="accordion-collapse collapse"
+        aria-labelledby="service-faq-heading-{{ index }}"
+        data-bs-parent="#serviceFaqAccordion"
+    >
+
+        <div class="accordion-body service-faq__answer">
+
+            {{ faq.answer|linebreaks }}
+
+        </div>
+
+    </div>
+
+</div>
+

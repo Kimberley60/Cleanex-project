@@ -1,0 +1,481 @@
+{% extends "base/base.html" %}
+
+{% block title %}Book a Cleaning Service | CLEANEX{% endblock %}
+
+{% block content %}
+
+<section class="booking-page py-5">
+    <div class="container">
+
+        <div class="row justify-content-center">
+
+            <div class="col-lg-9 col-xl-8">
+
+                <div class="booking-header text-center mb-5">
+                    <span class="booking-eyebrow">
+                        CLEANEX BOOKING
+                    </span>
+
+                    <h1 class="booking-title">
+                        Book Your Cleaning Service
+                    </h1>
+
+                    <p class="booking-subtitle">
+                        Tell us what you need and choose your preferred
+                        date and time. We'll take care of the rest.
+                    </p>
+                </div>
+
+
+                <div class="booking-card">
+
+                    {% if form.non_field_errors %}
+                        <div
+                            class="alert alert-danger"
+                            role="alert"
+                        >
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+
+                    <form method="post" novalidate>
+
+                        {% csrf_token %}
+
+
+                        <!-- =====================================
+                             CUSTOMER INFORMATION
+                        ====================================== -->
+
+                        <div class="booking-section">
+
+                            <div class="booking-section-heading">
+                                <span class="booking-step">01</span>
+
+                                <div>
+                                    <h2>Your Information</h2>
+
+                                    <p>
+                                        Tell us how we can reach you.
+                                    </p>
+                                </div>
+                            </div>
+
+
+                            <div class="row g-4">
+
+                                <div class="col-md-6">
+                                    <label
+                                        for="{{ form.full_name.id_for_label }}"
+                                        class="form-label"
+                                    >
+                                        {{ form.full_name.label }}
+                                    </label>
+
+                                    {{ form.full_name }}
+
+                                    {% for error in form.full_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+
+
+                                <div class="col-md-6">
+                                    <label
+                                        for="{{ form.email.id_for_label }}"
+                                        class="form-label"
+                                    >
+                                        {{ form.email.label }}
+                                    </label>
+
+                                    {{ form.email }}
+
+                                    {% for error in form.email.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+
+
+                                <div class="col-md-6">
+                                    <label
+                                        for="{{ form.phone.id_for_label }}"
+                                        class="form-label"
+                                    >
+                                        {{ form.phone.label }}
+                                    </label>
+
+                                    {{ form.phone }}
+
+                                    {% for error in form.phone.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- =====================================
+                             SERVICE
+                        ====================================== -->
+
+                        <div class="booking-section">
+
+                            <div class="booking-section-heading">
+                                <span class="booking-step">02</span>
+
+                                <div>
+                                    <h2>Choose Your Service</h2>
+
+                                    <p>
+                                        Select the cleaning service you need.
+                                    </p>
+                                </div>
+                            </div>
+
+
+                            <div class="mb-4">
+
+                                <label
+                                    for="{{ form.service.id_for_label }}"
+                                    class="form-label"
+                                >
+                                    {{ form.service.label }}
+                                </label>
+
+                                {{ form.service }}
+
+                                {% for error in form.service.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ error }}
+                                    </div>
+                                {% endfor %}
+
+                            </div>
+
+
+                            {% if form.extras.field.queryset.exists %}
+
+                                <div class="booking-extras">
+
+                                    <label class="form-label">
+                                        Additional Services
+                                    </label>
+
+                                    <div class="booking-extra-grid">
+
+                                        {% for checkbox in form.extras %}
+                                            <label
+                                                class="booking-extra-option"
+                                                for="{{ checkbox.id_for_label }}"
+                                            >
+                                                {{ checkbox.tag }}
+
+                                                <span>
+                                                    {{ checkbox.choice_label }}
+                                                </span>
+                                            </label>
+                                        {% endfor %}
+
+                                    </div>
+
+                                    {% for error in form.extras.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+
+                        <!-- =====================================
+                             DATE & TIME
+                        ====================================== -->
+
+                        <div class="booking-section">
+
+                            <div class="booking-section-heading">
+                                <span class="booking-step">03</span>
+
+                                <div>
+                                    <h2>Choose a Date & Time</h2>
+
+                                    <p>
+                                        Select when you'd like our team
+                                        to visit.
+                                    </p>
+                                </div>
+                            </div>
+
+
+                            <div class="row g-4">
+
+                                <div class="col-md-6">
+
+                                    <label
+                                        for="{{ form.booking_date.id_for_label }}"
+                                        class="form-label"
+                                    >
+                                        {{ form.booking_date.label }}
+                                    </label>
+
+                                    {{ form.booking_date }}
+
+                                    {% for error in form.booking_date.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+
+                                </div>
+
+
+                                <div class="col-md-6">
+
+                                    <label
+                                        for="{{ form.booking_time.id_for_label }}"
+                                        class="form-label"
+                                    >
+                                        {{ form.booking_time.label }}
+                                    </label>
+
+                                    {{ form.booking_time }}
+
+                                    {% for error in form.booking_time.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- =====================================
+                             PROPERTY
+                        ====================================== -->
+
+                        <div class="booking-section">
+
+                            <div class="booking-section-heading">
+                                <span class="booking-step">04</span>
+
+                                <div>
+                                    <h2>Property Details</h2>
+
+                                    <p>
+                                        Help us understand the size of
+                                        the cleaning job.
+                                    </p>
+                                </div>
+                            </div>
+
+
+                            <div class="row g-4">
+
+                                <div class="col-md-6">
+
+                                    <label
+                                        for="{{ form.property_size.id_for_label }}"
+                                        class="form-label"
+                                    >
+                                        {{ form.property_size.label }}
+                                    </label>
+
+                                    {{ form.property_size }}
+
+                                    {% for error in form.property_size.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+
+                                </div>
+
+
+                                <div class="col-md-6">
+
+                                    <label
+                                        for="{{ form.rooms.id_for_label }}"
+                                        class="form-label"
+                                    >
+                                        {{ form.rooms.label }}
+                                    </label>
+
+                                    {{ form.rooms }}
+
+                                    {% for error in form.rooms.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- =====================================
+                             LOCATION
+                        ====================================== -->
+
+                        <div class="booking-section">
+
+                            <div class="booking-section-heading">
+                                <span class="booking-step">05</span>
+
+                                <div>
+                                    <h2>Service Location</h2>
+
+                                    <p>
+                                        Where should our cleaning team go?
+                                    </p>
+                                </div>
+                            </div>
+
+
+                            <div class="row g-4">
+
+                                <div class="col-md-8">
+
+                                    <label
+                                        for="{{ form.address.id_for_label }}"
+                                        class="form-label"
+                                    >
+                                        {{ form.address.label }}
+                                    </label>
+
+                                    {{ form.address }}
+
+                                    {% for error in form.address.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+
+                                </div>
+
+
+                                <div class="col-md-4">
+
+                                    <label
+                                        for="{{ form.city.id_for_label }}"
+                                        class="form-label"
+                                    >
+                                        {{ form.city.label }}
+                                    </label>
+
+                                    {{ form.city }}
+
+                                    {% for error in form.city.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- =====================================
+                             NOTES
+                        ====================================== -->
+
+                        <div class="booking-section">
+
+                            <div class="booking-section-heading">
+                                <span class="booking-step">06</span>
+
+                                <div>
+                                    <h2>Additional Notes</h2>
+
+                                    <p>
+                                        Anything else you'd like us to know?
+                                    </p>
+                                </div>
+                            </div>
+
+
+                            <label
+                                for="{{ form.notes.id_for_label }}"
+                                class="form-label"
+                            >
+                                {{ form.notes.label }}
+                            </label>
+
+                            {{ form.notes }}
+
+                            {% for error in form.notes.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ error }}
+                                </div>
+                            {% endfor %}
+
+                        </div>
+
+
+                        <!-- =====================================
+                             SUBMIT
+                        ====================================== -->
+
+                        <div class="booking-submit">
+
+                            <div class="booking-submit-info">
+                                <i
+                                    class="fa-solid fa-shield-heart"
+                                    aria-hidden="true"
+                                ></i>
+
+                                <span>
+                                    Your booking information is handled securely.
+                                </span>
+                            </div>
+
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary booking-submit-button"
+                            >
+                                <span>Confirm Booking</span>
+
+                                <i
+                                    class="fa-solid fa-arrow-right"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</section>
+
+{% endblock %}
+

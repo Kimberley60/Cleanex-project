@@ -1,0 +1,30 @@
+<article class="service-feature">
+
+    <div class="service-feature__icon">
+
+        <i
+            class="{{ feature.icon|default:'fa-solid fa-check' }}"
+            aria-hidden="true"
+        ></i>
+
+    </div>
+
+
+    <div class="service-feature__content">
+
+        <h3 class="service-feature__title">
+            {{ feature.title }}
+        </h3>
+
+        {% if feature.description %}
+
+            <p class="service-feature__description">
+                {{ feature.description }}
+            </p>
+
+        {% endif %}
+
+    </div>
+
+</article>
+

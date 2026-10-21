@@ -1,0 +1,228 @@
+{% extends "base/base.html" %}
+
+{% block title %}Booking Confirmed | CLEANEX{% endblock %}
+
+{% block content %}
+
+<section class="booking-success py-5">
+
+    <div class="container">
+
+        <div class="row justify-content-center">
+
+            <div class="col-lg-8">
+
+                <div class="booking-success-card text-center">
+
+                    <div class="booking-success-icon">
+                        <i
+                            class="fa-solid fa-check"
+                            aria-hidden="true"
+                        ></i>
+                    </div>
+
+
+                    <span class="booking-eyebrow">
+                        BOOKING RECEIVED
+                    </span>
+
+
+                    <h1>
+                        Thank You for Choosing CLEANEX
+                    </h1>
+
+
+                    {% if booking %}
+
+                        <p class="booking-success-lead">
+                            Your cleaning booking has been successfully
+                            submitted. Our team will review the request
+                            and confirm the appointment.
+                        </p>
+
+
+                        <div class="booking-reference">
+
+                            <span>
+                                Booking Reference
+                            </span>
+
+                            <strong>
+                                {{ booking.booking_reference }}
+                            </strong>
+
+                        </div>
+
+                        <div class="booking-summary-row">
+
+                            <span>
+                                Contact
+                            </span>
+
+                            <strong>
+                                {{ booking.contact_name }}
+                            </strong>
+
+                        </div>
+
+
+                        <div class="booking-summary text-start">
+
+                            <div class="booking-summary-row">
+                                <span>Service</span>
+                                <strong>
+                                    {{ booking.service.name }}
+                                </strong>
+                            </div>
+
+
+                            <div class="booking-summary-row">
+                                <span>Date</span>
+                                <strong>
+                                    {{ booking.booking_date|date:"F j, Y" }}
+                                </strong>
+                            </div>
+
+
+                            <div class="booking-summary-row">
+                                <span>Time</span>
+                                <strong>
+                                    {{ booking.booking_time|time:"g:i A" }}
+                                </strong>
+                            </div>
+
+
+                            <div class="booking-summary-row">
+                                <span>Location</span>
+                                <strong>
+                                    {{ booking.city }}
+                                </strong>
+                            </div>
+
+
+                            <div class="booking-summary-row booking-summary-total">
+                                <span>Estimated Total</span>
+                                <strong>
+                                    KSh {{ booking.total_price|floatformat:2 }}
+                                </strong>
+                            </div>
+
+                        </div>
+
+
+                        <div class="payment-section mt-4 text-start">
+                            <h2 class="h5 mb-3">M-Pesa Payment</h2>
+
+                            {% for payment in booking.payments.all %}
+                                {% if forloop.first %}
+                                    <div class="booking-summary-row">
+                                        <span>Payment status</span>
+                                        <strong>
+                                            {% if payment.status == "paid" %}
+                                                Paid
+                                            {% elif payment.status == "processing" %}
+                                                Processing
+                                            {% elif payment.status == "failed" %}
+                                                Failed
+                                            {% else %}
+                                                Pending
+                                            {% endif %}
+                                        </strong>
+                                    </div>
+
+                                    {% if payment.status == "paid" %}
+                                        {% if payment.mpesa_receipt %}
+                                            <p class="small text-success mt-2 mb-0">
+                                                M-Pesa receipt: {{ payment.mpesa_receipt }}
+                                            </p>
+                                        {% endif %}
+
+                                    {% elif payment.status == "processing" %}
+                                        <p class="small text-muted mt-2">
+                                            Your payment request is being processed.
+                                            Check your phone and wait for confirmation.
+                                        </p>
+
+                                    {% else %}
+                                        <p class="small text-muted mt-2">
+                                            Complete payment using M-Pesa to pay the estimated total.
+                                        </p>
+
+                                        <form
+                                            method="post"
+                                            action="{% url 'payments:initiate_booking_payment' booking.pk %}"
+                                            class="mt-3"
+                                        >
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-success w-100">
+                                                <i class="fa-solid fa-mobile-screen-button me-2"
+                                                   aria-hidden="true"></i>
+                                                {% if payment.status == "failed" %}
+                                                    Try M-Pesa Payment Again
+                                                {% else %}
+                                                    Pay Now with M-Pesa
+                                                {% endif %}
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                {% endif %}
+                            {% empty %}
+                                <p class="small text-muted">
+                                    You can pay for this booking securely using M-Pesa.
+                                </p>
+
+                                <form
+                                    method="post"
+                                    action="{% url 'payments:initiate_booking_payment' booking.pk %}"
+                                    class="mt-3"
+                                >
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-success w-100">
+                                        <i class="fa-solid fa-mobile-screen-button me-2"
+                                           aria-hidden="true"></i>
+                                        Pay Now with M-Pesa
+                                    </button>
+                                </form>
+                            {% endfor %}
+                        </div>
+
+
+                    {% else %}
+
+                        <p class="booking-success-lead">
+                            Your booking request has been received.
+                        </p>
+
+                    {% endif %}
+
+
+                    <div class="booking-success-actions">
+
+                        <a
+                            href="{% url 'services' %}"
+                            class="btn btn-outline-primary"
+                        >
+                            Explore Services
+                        </a>
+
+                        <a
+                            href="{% url 'booking_track' %}"
+                            class="btn btn-primary"
+                        >
+                            Track Booking
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+{% endblock %}
+
