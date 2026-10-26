@@ -12,6 +12,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "status",
         "phone_number",
         "mpesa_receipt",
+        "transaction_date",
         "created_at",
     )
 

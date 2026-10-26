@@ -1,54 +1,53 @@
 from pathlib import Path
-from decouple import config
+from decouple import config, Csv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+
+# =========================================================
+# BASE DIRECTORY
+# =========================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+# =========================================================
+# SECURITY AND ENVIRONMENT SETTINGS
+# =========================================================
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-#69j%959-_rnnu!9j+l4xyrnffc!ac3v87(sc3d8mnvn=8r=v6'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
-
-# M-Pesa / Daraja configuration
-
-MPESA_CONSUMER_KEY = config(
-    "MPESA_CONSUMER_KEY",
-    default="",
+# Always provide a strong SECRET_KEY through the environment
+# in production. The fallback is for local development only.
+SECRET_KEY = config(
+    "SECRET_KEY",
+    default="django-insecure-change-this-for-local-development",
 )
 
-MPESA_CONSUMER_SECRET = config(
-    "MPESA_CONSUMER_SECRET",
-    default="",
+# DEBUG should be True locally and False in production.
+DEBUG = config(
+    "DEBUG",
+    default=True,
+    cast=bool,
 )
 
-MPESA_SHORTCODE = config(
-    "MPESA_SHORTCODE",
-    default="",
+# Read allowed hosts from .env.
+# The fallback supports local development only.
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    default="localhost,127.0.0.1,[::1]",
+    cast=Csv(),
 )
 
-MPESA_PASSKEY = config(
-    "MPESA_PASSKEY",
-    default="",
-)
 
-MPESA_CALLBACK_URL = config(
-    "MPESA_CALLBACK_URL",
-    default="",
-)
+# =========================================================
+# M-PESA / DARAJA CONFIGURATION
+# =========================================================
 
-MPESA_ENVIRONMENT = config(
-    "MPESA_ENVIRONMENT",
-    default="sandbox",
-)
+MPESA_CONSUMER_KEY = config("MPESA_CONSUMER_KEY", default="")
+MPESA_CONSUMER_SECRET = config("MPESA_CONSUMER_SECRET", default="")
+MPESA_SHORTCODE = config("MPESA_SHORTCODE", default="")
+MPESA_PASSKEY = config("MPESA_PASSKEY", default="")
+MPESA_CALLBACK_URL = config("MPESA_CALLBACK_URL", default="")
+MPESA_ENVIRONMENT = config("MPESA_ENVIRONMENT", default="sandbox")
+
+
 
 
 # Application definition

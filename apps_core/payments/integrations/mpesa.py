@@ -1,8 +1,10 @@
 import base64
+import re
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import requests
 from decouple import config
+
 
 
 class MpesaIntegration:
@@ -15,13 +17,9 @@ class MpesaIntegration:
     Payment business rules remain in payments/services.py.
     """
 
-    SANDBOX_BASE_URL = (
-        "https://sandbox.safaricom.co.ke"
-    )
+    SANDBOX_BASE_URL = "https://sandbox.safaricom.co.ke"
 
-    PRODUCTION_BASE_URL = (
-        "https://api.safaricom.co.ke"
-    )
+    PRODUCTION_BASE_URL = "https://api.safaricom.co.ke"
 
     def __init__(self):
         self.consumer_key = config(
@@ -104,9 +102,7 @@ class MpesaIntegration:
 
         data = response.json()
 
-        access_token = data.get(
-            "access_token"
-        )
+        access_token = data.get("access_token")
 
         if not access_token:
             raise ValueError(
@@ -141,6 +137,42 @@ class MpesaIntegration:
             raw_password.encode("utf-8")
         ).decode("utf-8")
 
+    @staticmethod
+    def _normalize_phone_number(phone_number):
+        """
+        Normalize a Kenyan mobile number to 254XXXXXXXXX.
+
+        Accepts common formats such as:
+        0712345678
+        0112345678
+        254712345678
+        +254712345678
+        """
+
+        if not phone_number:
+            raise ValueError(
+                "A phone number is required."
+            )
+
+        phone = str(phone_number).strip()
+
+        # Remove common formatting characters.
+        phone = re.sub(r"[\s()+-]", "", phone)
+
+        if phone.startswith("0") and len(phone) == 10:
+            phone = "254" + phone[1:]
+
+        elif len(phone) == 9 and phone[0] in {"7", "1"}:
+            phone = "254" + phone
+
+        if not re.fullmatch(r"254[71]\d{8}", phone):
+            raise ValueError(
+                "Enter a valid Kenyan mobile number, "
+                "for example 0712345678 or 254712345678."
+            )
+
+        return phone
+
     def initiate_stk_push(
         self,
         *,
@@ -157,17 +189,31 @@ class MpesaIntegration:
         service layer.
         """
 
-        amount = Decimal(str(amount))
+        # Validate and normalize the amount.
+        try:
+            amount = Decimal(str(amount))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValueError(
+                "A valid payment amount is required."
+            ) from None
 
-        if amount <= Decimal("0.00"):
+        if not amount.is_finite() or amount <= Decimal("0"):
             raise ValueError(
                 "STK Push amount must be greater than zero."
             )
 
-        if not phone_number:
+        if amount != amount.to_integral_value():
             raise ValueError(
-                "A phone number is required."
+                "STK Push amount must be a whole number "
+                "of Kenyan shillings."
             )
+
+        amount = int(amount)
+
+        # Validate and normalize the phone number.
+        phone_number = self._normalize_phone_number(
+            phone_number
+        )
 
         if not account_reference:
             raise ValueError(
@@ -213,7 +259,7 @@ class MpesaIntegration:
             "TransactionType": (
                 "CustomerPayBillOnline"
             ),
-            "Amount": int(amount),
+            "Amount": amount,
             "PartyA": phone_number,
             "PartyB": self.shortcode,
             "PhoneNumber": phone_number,
@@ -234,4 +280,3 @@ class MpesaIntegration:
         response.raise_for_status()
 
         return response.json()
-

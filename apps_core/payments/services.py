@@ -1,14 +1,31 @@
 from decimal import Decimal
+import logging
 from django.db import transaction
 from django.utils import timezone
 from apps_core.bookings.models import Booking
 from apps_core.payments.models import Payment
 
 
+logger = logging.getLogger(__name__)
 
+
+# Payment state machine.
+#
+# "pending" -> "initiating" -> "processing" -> "paid"
+#                                      \----> "failed"
+#                                      \----> "unknown"
+#
+# "unknown" can be resolved by a verified callback to "paid" or "failed".
+# "paid" and "failed" are terminal states.
+#
+# pending -> processing is retained for compatibility with direct service
+# calls and existing tests. initiate_payment() always persists "initiating"
+# before making the external Daraja request.
 PAYMENT_STATUS_TRANSITIONS = {
-    "pending": {"processing", "failed"},
-    "processing": {"paid", "failed"},
+    "pending": {"initiating", "processing", "failed"},
+    "initiating": {"processing", "failed", "unknown"},
+    "processing": {"paid", "failed", "unknown"},
+    "unknown": {"paid", "failed"},
     "paid": set(),
     "failed": set(),
 }
@@ -21,14 +38,14 @@ def create_payment(
     amount=None,
 ):
     """
-    Create a pending payment for a booking.
+    Create a new pending payment for a booking.
 
-    If amount is not supplied, the booking's total_price is used.
-    A custom amount may be supplied when the payment flow requires it.
+    A separate Payment record is created for each new attempt, preserving
+    the history of previous failed attempts.
     """
 
-    if booking is None:
-        raise ValueError("Booking is required.")
+    if booking is None or not isinstance(booking, Booking):
+        raise ValueError("A valid booking is required.")
 
     if not phone_number:
         raise ValueError("Phone number is required.")
@@ -36,9 +53,12 @@ def create_payment(
     if amount is None:
         amount = booking.total_price
 
-    amount = Decimal(str(amount))
+    try:
+        amount = Decimal(str(amount))
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        raise ValueError("A valid payment amount is required.") from exc
 
-    if amount <= Decimal("0.00"):
+    if not amount.is_finite() or amount <= Decimal("0.00"):
         raise ValueError("Payment amount must be greater than zero.")
 
     return Payment.objects.create(
@@ -48,7 +68,6 @@ def create_payment(
         status="pending",
         phone_number=phone_number,
     )
-
 
 
 def get_payment_for_booking(booking):
@@ -62,7 +81,7 @@ def get_payment_for_booking(booking):
     return (
         Payment.objects
         .filter(booking=booking)
-        .order_by("-created_at")
+        .order_by("-created_at", "-pk")
         .first()
     )
 
@@ -75,14 +94,18 @@ def mark_payment_processing(
     merchant_request_id=None,
 ):
     """
-    Mark a payment as processing after Safaricom accepts
-    the STK Push request.
+    Mark a payment as processing after Daraja accepts the STK Push.
+
+    The checkout request ID is stored so the callback can be matched to
+    this payment attempt.
     """
 
     _validate_payment(payment)
 
     if not checkout_request_id:
         raise ValueError("Checkout request ID is required.")
+
+    payment = Payment.objects.select_for_update().get(pk=payment.pk)
 
     _validate_status_transition(
         payment.status,
@@ -119,8 +142,8 @@ def mark_payment_paid(
     """
     Mark a payment as successfully paid.
 
-    This is the point at which the system records the M-Pesa receipt
-    and treats the payment as financially successful.
+    A valid M-Pesa receipt is required before the payment can be marked
+    as paid. Payments already paid or failed cannot be changed again.
     """
 
     _validate_payment(payment)
@@ -128,20 +151,20 @@ def mark_payment_paid(
     if not mpesa_receipt:
         raise ValueError("M-Pesa receipt is required.")
 
+    payment = Payment.objects.select_for_update().get(pk=payment.pk)
+
     _validate_status_transition(
         payment.status,
         "paid",
     )
 
     payment.status = "paid"
-    payment.mpesa_receipt = mpesa_receipt
+    payment.mpesa_receipt = str(mpesa_receipt)
     payment.result_code = str(result_code)
-    payment.result_description = result_description
-
-    if transaction_date:
-        payment.transaction_date = transaction_date
-    else:
-        payment.transaction_date = timezone.now()
+    payment.result_description = (
+        result_description or "Payment completed successfully."
+    )
+    payment.transaction_date = transaction_date or timezone.now()
 
     payment.save(
         update_fields=[
@@ -165,13 +188,15 @@ def mark_payment_failed(
     result_description="Payment failed.",
 ):
     """
-    Mark a payment as failed.
+    Mark a payment as definitively failed.
 
-    Failed payments remain attached to the booking so that the
-    payment history is preserved.
+    Failed records are retained so that previous payment attempts are
+    not deleted when a customer starts a new attempt.
     """
 
     _validate_payment(payment)
+
+    payment = Payment.objects.select_for_update().get(pk=payment.pk)
 
     _validate_status_transition(
         payment.status,
@@ -183,7 +208,60 @@ def mark_payment_failed(
     if result_code is not None:
         payment.result_code = str(result_code)
 
-    payment.result_description = result_description
+    payment.result_description = (
+        result_description or "Payment failed."
+    )
+
+    payment.save(
+        update_fields=[
+            "status",
+            "result_code",
+            "result_description",
+            "updated_at",
+        ]
+    )
+
+    return payment
+
+
+@transaction.atomic
+def mark_payment_unknown(
+    payment,
+    *,
+    result_code=None,
+    result_description=(
+        "The payment outcome could not be confirmed. "
+        "Verify the transaction before retrying."
+    ),
+):
+    """
+    Mark a payment as having an uncertain outcome.
+
+    Use this when a request may have reached Safaricom but the application
+    cannot confirm the result, such as after a timeout or connection error.
+
+    Unknown payments must not be automatically retried. A verified callback
+    can later resolve the payment to paid or failed.
+    """
+
+    _validate_payment(payment)
+
+    payment = Payment.objects.select_for_update().get(pk=payment.pk)
+
+    _validate_status_transition(
+        payment.status,
+        "unknown",
+    )
+
+    payment.status = "unknown"
+
+    if result_code is not None:
+        payment.result_code = str(result_code)
+
+    payment.result_description = (
+        result_description
+        or "The payment outcome could not be confirmed."
+    )
 
     payment.save(
         update_fields=[
@@ -199,14 +277,16 @@ def mark_payment_failed(
 
 def _validate_payment(payment):
     """
-    Internal validation helper.
+    Validate that the supplied object is a saved Payment instance.
     """
 
     if not isinstance(payment, Payment):
         raise ValueError("A valid payment is required.")
 
     if not payment.pk:
-        raise ValueError("The payment must be saved before its status can change.")
+        raise ValueError(
+            "The payment must be saved before its status can change."
+        )
 
 
 def _validate_status_transition(current_status, new_status):
@@ -217,14 +297,13 @@ def _validate_status_transition(current_status, new_status):
     valid_statuses = dict(Payment.STATUS_CHOICES)
 
     if new_status not in valid_statuses:
-        raise ValueError(
-            f"Invalid payment status: {new_status}"
-        )
+        raise ValueError(f"Invalid payment status: {new_status}")
+
+    if current_status not in valid_statuses:
+        raise ValueError(f"Invalid current payment status: {current_status}")
 
     if current_status == new_status:
-        raise ValueError(
-            f"Payment is already {current_status}."
-        )
+        raise ValueError(f"Payment is already {current_status}.")
 
     allowed_statuses = PAYMENT_STATUS_TRANSITIONS.get(
         current_status,
@@ -233,80 +312,163 @@ def _validate_status_transition(current_status, new_status):
 
     if new_status not in allowed_statuses:
         raise ValueError(
-            f"Payment cannot move from "
-            f"{current_status} to {new_status}."
+            f"Payment cannot move from {current_status} to {new_status}."
         )
 
 
+def initiate_payment(payment):
+    if not isinstance(payment, Payment) or payment.pk is None:
+        raise ValueError(
+            "The payment must be saved before an STK Push can be initiated."
+        )
 
-@transaction.atomic
-def initiate_payment(
-    payment,
-):
     """
-    Initiate an M-Pesa STK Push for an existing payment.
+    Initiate an M-Pesa STK Push for an existing pending payment.
 
-    The payment must already exist and be in pending status.
+    Workflow:
+      1. Lock and validate the pending payment.
+      2. Persist "initiating" and commit that state.
+      3. Send the external STK Push request outside the transaction.
+      4. Mark the payment "processing" if Daraja accepts the request.
+      5. Mark a definite rejection "failed".
+      6. Mark an ambiguous outcome "unknown".
 
-    The payment is moved to processing only after
-    Daraja accepts the STK Push request.
+    This prevents a second request from being started against the same
+    payment record while an earlier request may already be in flight.
     """
 
-    if not isinstance(payment, Payment):
-        raise ValueError(
-            "A valid payment is required."
+    _validate_payment(payment)
+
+    # Commit the initiating state before making the network request.
+    # Do not keep a database transaction open during the HTTP request.
+    with transaction.atomic():
+        locked_payment = (
+            Payment.objects
+            .select_for_update()
+            .select_related("booking")
+            .get(pk=payment.pk)
         )
 
-    if not payment.pk:
-        raise ValueError(
-            "The payment must be saved before "
-            "an STK Push can be initiated."
+        if locked_payment.status != "pending":
+            raise ValueError(
+                "Only pending payments can be initiated."
+            )
+
+        _validate_status_transition(
+            locked_payment.status,
+            "initiating",
         )
 
-    if payment.status != "pending":
-        raise ValueError(
-            "Only pending payments can be initiated."
+        locked_payment.status = "initiating"
+        locked_payment.save(
+            update_fields=["status", "updated_at"]
         )
+
+    # Keep the caller's instance consistent with the database.
+    payment.refresh_from_db()
 
     from .integrations.mpesa import MpesaIntegration
 
-    mpesa = MpesaIntegration()
+    try:
+        mpesa = MpesaIntegration()
 
-    response = mpesa.initiate_stk_push(
-        amount=payment.amount,
-        phone_number=payment.phone_number,
-        account_reference=(
-            payment.booking.booking_reference
-        ),
-        transaction_description=(
-            f"CLEANEX payment for "
-            f"{payment.booking.booking_reference}"
-        ),
-    )
-
-    response_code = response.get(
-        "ResponseCode"
-    )
-
-    if response_code != "0":
-        raise ValueError(
-            response.get(
-                "ResponseDescription",
-                "M-Pesa STK Push was rejected.",
-            )
+        response = mpesa.initiate_stk_push(
+            amount=payment.amount,
+            phone_number=payment.phone_number,
+            account_reference=payment.booking.booking_reference,
+            transaction_description=(
+                f"CLEANEX payment for "
+                f"{payment.booking.booking_reference}"
+            ),
         )
 
-    checkout_request_id = response.get(
-        "CheckoutRequestID"
-    )
+    except Exception:
+        # A timeout or connection failure does not prove that Safaricom
+        # rejected the request. Do not automatically make it retryable.
+        logger.exception(
+            "Uncertain outcome while submitting STK Push for payment %s.",
+            payment.pk,
+        )
 
-    merchant_request_id = response.get(
-        "MerchantRequestID"
-    )
+        try:
+            mark_payment_unknown(
+                payment,
+                result_description=(
+                    "The payment request outcome could not be confirmed. "
+                    "Verify the transaction before retrying."
+                ),
+            )
+        except Exception:
+            logger.exception(
+                "Could not mark payment %s as unknown after an "
+                "STK Push submission error.",
+                payment.pk,
+            )
 
-    if not checkout_request_id:
+        # Preserve the original exception for the calling view to handle.
+        raise
+
+    if not isinstance(response, dict):
+        mark_payment_unknown(
+            payment,
+            result_description=(
+                "Safaricom returned an unexpected response. "
+                "Verify the transaction before retrying."
+            ),
+        )
         raise ValueError(
-            "M-Pesa did not return a CheckoutRequestID."
+            "The payment outcome could not be confirmed. "
+            "Verify the transaction before retrying."
+        )
+
+    response_code = response.get("ResponseCode")
+
+    # Only a clear non-zero Daraja response is treated as a definite
+    # rejection. Missing or malformed response codes are ambiguous.
+    if response_code is not None and str(response_code) != "0":
+        description = (
+            response.get("ResponseDescription")
+            or response.get("errorMessage")
+            or "Safaricom rejected the STK Push request."
+        )
+
+        mark_payment_failed(
+            payment,
+            result_code=response_code,
+            result_description=str(description),
+        )
+
+        raise ValueError(str(description))
+
+    if str(response_code) != "0":
+        mark_payment_unknown(
+            payment,
+            result_description=(
+                "Safaricom returned no valid response code. "
+                "Verify the transaction before retrying."
+            ),
+        )
+        raise ValueError(
+            "The payment outcome could not be confirmed. "
+            "Verify the transaction before retrying."
+        )
+
+    checkout_request_id = response.get("CheckoutRequestID")
+    merchant_request_id = response.get("MerchantRequestID")
+
+    # A successful response code without a checkout ID cannot be safely
+    # correlated with a later callback. Treat the outcome as uncertain.
+    if not checkout_request_id:
+        mark_payment_unknown(
+            payment,
+            result_description=(
+                "Safaricom accepted the request but did not return a "
+                "checkout request ID. Verify the transaction before retrying."
+            ),
+        )
+        raise ValueError(
+            "The payment outcome could not be confirmed. "
+            "Contact CLEANEX support before retrying."
         )
 
     mark_payment_processing(
@@ -315,8 +477,8 @@ def initiate_payment(
         merchant_request_id=merchant_request_id,
     )
 
+    payment.refresh_from_db()
     return payment
-
 
 
 @transaction.atomic
@@ -324,51 +486,34 @@ def process_mpesa_callback(payload):
     """
     Process a Safaricom M-Pesa STK callback.
 
-    The callback is the authoritative source for the
-    final payment result.
+    The callback is used to resolve the payment result. Duplicate callbacks
+    for already-paid or already-failed payments are ignored.
 
-    Successful callbacks move the payment to paid.
-    Failed callbacks move the payment to failed.
-
-    Duplicate callbacks are handled safely and do not
-    attempt to change an already-paid or already-failed
-    payment again.
+    Callbacks can resolve payments in "processing" or "unknown" states.
     """
 
     if not isinstance(payload, dict):
-        raise ValueError(
-            "A valid callback payload is required."
-        )
+        raise ValueError("A valid callback payload is required.")
 
     body = payload.get("Body")
 
     if not isinstance(body, dict):
-        raise ValueError(
-            "M-Pesa callback Body is missing."
-        )
+        raise ValueError("M-Pesa callback Body is missing.")
 
     stk_callback = body.get("stkCallback")
 
     if not isinstance(stk_callback, dict):
-        raise ValueError(
-            "M-Pesa stkCallback is missing."
-        )
+        raise ValueError("M-Pesa stkCallback is missing.")
 
-    checkout_request_id = stk_callback.get(
-        "CheckoutRequestID"
-    )
+    checkout_request_id = stk_callback.get("CheckoutRequestID")
 
     if not checkout_request_id:
-        raise ValueError(
-            "Checkout request ID is missing from callback."
-        )
+        raise ValueError("Checkout request ID is missing from callback.")
 
     payment = (
         Payment.objects
         .select_for_update()
-        .filter(
-            checkout_request_id=checkout_request_id
-        )
+        .filter(checkout_request_id=checkout_request_id)
         .first()
     )
 
@@ -377,32 +522,32 @@ def process_mpesa_callback(payload):
             "Payment matching the callback was not found."
         )
 
-    result_code = stk_callback.get(
-        "ResultCode"
-    )
+    result_code = stk_callback.get("ResultCode")
 
-    result_description = stk_callback.get(
-        "ResultDesc",
-        "",
-    )
+    if result_code is None:
+        raise ValueError("M-Pesa callback ResultCode is missing.")
 
-    # Safely ignore duplicate callbacks.
-    if payment.status in {
-        "paid",
-        "failed",
-    }:
+    result_description = stk_callback.get("ResultDesc", "")
+
+    # Safely ignore duplicate callbacks for terminal states.
+    if payment.status in {"paid", "failed"}:
         return payment
 
-    if str(result_code) == "0":
-        callback_items = stk_callback.get(
-            "CallbackMetadata",
-            {},
+    if payment.status not in {"initiating", "processing", "unknown"}:
+        raise ValueError(
+            f"Cannot process callback for payment status {payment.status}."
         )
 
-        item_list = callback_items.get(
-            "Item",
-            [],
-        )
+    if str(result_code) == "0":
+        callback_metadata = stk_callback.get("CallbackMetadata", {})
+
+        if not isinstance(callback_metadata, dict):
+            raise ValueError("Callback metadata is invalid.")
+
+        item_list = callback_metadata.get("Item", [])
+
+        if not isinstance(item_list, list):
+            raise ValueError("Callback metadata items are invalid.")
 
         mpesa_receipt = None
         transaction_date = None
@@ -422,38 +567,43 @@ def process_mpesa_callback(payload):
 
         if not mpesa_receipt:
             raise ValueError(
-                "M-Pesa receipt is missing from "
-                "successful callback."
+                "M-Pesa receipt is missing from successful callback."
             )
+
+        parsed_transaction_date = None
 
         if transaction_date:
             try:
-                transaction_date = timezone.datetime.strptime(
+                parsed_transaction_date = timezone.datetime.strptime(
                     str(transaction_date),
                     "%Y%m%d%H%M%S",
                 )
-                transaction_date = timezone.make_aware(
-                    transaction_date,
+                parsed_transaction_date = timezone.make_aware(
+                    parsed_transaction_date,
                     timezone.get_current_timezone(),
                 )
-            except (TypeError, ValueError):
-                transaction_date = timezone.now()
+            except (TypeError, ValueError, OverflowError):
+                # A malformed transaction timestamp should not discard
+                # a valid receipt and successful callback.
+                logger.warning(
+                    "Invalid transaction date in callback for payment %s.",
+                    payment.pk,
+                )
+                parsed_transaction_date = timezone.now()
 
         return mark_payment_paid(
             payment,
             mpesa_receipt=str(mpesa_receipt),
-            transaction_date=transaction_date,
+            transaction_date=parsed_transaction_date,
             result_code=result_code,
-            result_description=result_description
-            or "Payment completed successfully.",
+            result_description=(
+                result_description
+                or "Payment completed successfully."
+            ),
         )
 
     return mark_payment_failed(
         payment,
         result_code=result_code,
-        result_description=(
-            result_description
-            or "Payment failed."
-        ),
+        result_description=result_description or "Payment failed.",
     )
-

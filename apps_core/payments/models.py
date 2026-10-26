@@ -5,7 +5,9 @@ from apps_core.bookings.models import Booking
 class Payment(models.Model):
     STATUS_CHOICES = (
         ("pending", "Pending"),
+        ("initiating", "Initiating"),
         ("processing", "Processing"),
+        ("unknown", "Outcome Unknown"),
         ("paid", "Paid"),
         ("failed", "Failed"),
     )

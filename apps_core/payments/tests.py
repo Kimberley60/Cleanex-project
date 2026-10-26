@@ -8,10 +8,11 @@ from apps_core.payments.models import Payment
 from apps_core.payments.services import (
     create_payment,
     get_payment_for_booking,
+    initiate_payment,
     mark_payment_failed,
     mark_payment_paid,
     mark_payment_processing,
-    initiate_payment, process_mpesa_callback,
+    process_mpesa_callback,
 )
 from apps_core.services.models import Service
 
@@ -636,7 +637,7 @@ class PaymentInitiationTests(TestCase):
 
         self.assertEqual(
             self.payment.status,
-            "pending",
+            "failed",
         )
 
     def test_processing_payment_cannot_be_initiated_again(self):
@@ -1172,3 +1173,253 @@ class MpesaCallbackViewTests(TestCase):
             405,
         )
 
+
+
+
+class BookingPaymentViewTests(TestCase):
+    def setUp(self):
+        self.customer = Customer.objects.create(
+            full_name="Booking Payment Customer",
+            email="bookingpayment@example.com",
+            phone="0712345678",
+            address="Test Address",
+            city="Nairobi",
+        )
+
+        self.service = Service.objects.create(
+            name="Booking Payment Cleaning",
+            slug="booking-payment-cleaning",
+            description="Service for booking payment view tests.",
+            base_price=Decimal("5000.00"),
+            duration_hours=2,
+            is_active=True,
+        )
+
+        self.booking = Booking.objects.create(
+            customer=self.customer,
+            contact_name=self.customer.full_name,
+            contact_email=self.customer.email,
+            contact_phone=self.customer.phone,
+            service=self.service,
+            booking_date="2030-01-15",
+            booking_time="10:00",
+            address="Test Address",
+            city="Nairobi",
+            property_size=100,
+            rooms=3,
+            total_price=Decimal("5000.00"),
+            status="pending",
+        )
+
+        self.url = reverse(
+            "payments:initiate_booking_payment",
+            kwargs={"booking_id": self.booking.pk},
+        )
+
+        session = self.client.session
+        session["booking_success_id"] = self.booking.pk
+        session.save()
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_successful_request_uses_saved_booking_total(
+        self, mock_initiate
+    ):
+        response = self.client.post(
+            self.url,
+            {"amount": "1"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        payment = Payment.objects.get(booking=self.booking)
+
+        self.assertEqual(payment.amount, Decimal("5000.00"))
+        self.assertEqual(payment.status, "pending")
+
+        mock_initiate.assert_called_once_with(payment)
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_booking_id_not_in_session_returns_404(
+        self, mock_initiate
+    ):
+        session = self.client.session
+        session["booking_success_id"] = self.booking.pk + 999
+        session.save()
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 404)
+        mock_initiate.assert_not_called()
+        self.assertEqual(Payment.objects.count(), 0)
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_paid_payment_does_not_start_another_request(
+        self, mock_initiate
+    ):
+        payment = create_payment(
+            booking=self.booking,
+            phone_number=self.customer.phone,
+        )
+        payment.status = "processing"
+        payment.checkout_request_id = "test-checkout-paid"
+        payment.save(
+            update_fields=["status", "checkout_request_id"]
+        )
+        mark_payment_paid(
+            payment,
+            mpesa_receipt="TESTPAID123",
+        )
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        mock_initiate.assert_not_called()
+        self.assertEqual(Payment.objects.count(), 1)
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_processing_payment_does_not_start_duplicate_request(
+        self, mock_initiate
+    ):
+        payment = create_payment(
+            booking=self.booking,
+            phone_number=self.customer.phone,
+        )
+        mark_payment_processing(
+            payment,
+            checkout_request_id="test-checkout-processing",
+        )
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        mock_initiate.assert_not_called()
+        self.assertEqual(Payment.objects.count(), 1)
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_pending_payment_is_reused(
+        self, mock_initiate
+    ):
+        payment = create_payment(
+            booking=self.booking,
+            phone_number=self.customer.phone,
+        )
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        mock_initiate.assert_called_once_with(payment)
+        self.assertEqual(Payment.objects.count(), 1)
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_failed_payment_history_is_preserved(
+        self, mock_initiate
+    ):
+        failed_payment = create_payment(
+            booking=self.booking,
+            phone_number=self.customer.phone,
+        )
+        mark_payment_failed(
+            failed_payment,
+            result_code="1032",
+            result_description="Request cancelled.",
+        )
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Payment.objects.count(), 2)
+
+        failed_payment.refresh_from_db()
+        self.assertEqual(failed_payment.status, "failed")
+
+        new_payment = Payment.objects.exclude(
+            pk=failed_payment.pk
+        ).get()
+
+        self.assertEqual(new_payment.status, "pending")
+        mock_initiate.assert_called_once_with(new_payment)
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_stk_push_error_preserves_payment_record(
+        self, mock_initiate
+    ):
+        mock_initiate.side_effect = ValueError(
+            "Unable to process request."
+        )
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Payment.objects.count(), 1)
+
+        payment = Payment.objects.get(booking=self.booking)
+        self.assertEqual(payment.status, "pending")
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_initiating_payment_does_not_start_duplicate_request(
+        self, mock_initiate
+    ):
+        payment = create_payment(
+            booking=self.booking,
+            phone_number=self.customer.phone,
+        )
+        payment.status = "initiating"
+        payment.save(update_fields=["status"])
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        mock_initiate.assert_not_called()
+        self.assertEqual(Payment.objects.count(), 1)
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_unknown_payment_outcome_does_not_start_duplicate_request(
+        self, mock_initiate
+    ):
+        payment = create_payment(
+            booking=self.booking,
+            phone_number=self.customer.phone,
+        )
+        payment.status = "unknown"
+        payment.save(update_fields=["status"])
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        mock_initiate.assert_not_called()
+        self.assertEqual(Payment.objects.count(), 1)
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_unexpected_payment_status_blocks_retry(
+        self, mock_initiate
+    ):
+        payment = create_payment(
+            booking=self.booking,
+            phone_number=self.customer.phone,
+        )
+        payment.status = "unexpected"
+        payment.save(update_fields=["status"])
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        mock_initiate.assert_not_called()
+        self.assertEqual(Payment.objects.count(), 1)
+
+    @patch("apps_core.payments.views.initiate_payment")
+    def test_unexpected_initiation_exception_preserves_payment_record(
+        self, mock_initiate
+    ):
+        mock_initiate.side_effect = RuntimeError("network outcome uncertain")
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Payment.objects.count(), 1)
+        payment = Payment.objects.get(booking=self.booking)
+        self.assertEqual(payment.status, "pending")
+
+    def test_initiation_endpoint_rejects_get_request(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 405)
