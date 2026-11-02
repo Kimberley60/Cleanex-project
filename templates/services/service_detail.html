@@ -6,7 +6,7 @@
 
 {% block content %}
 
-
+<div class="service-detail-page">
 
 <!-- =========================================================
      SERVICE HERO
@@ -236,69 +236,63 @@
         </div>
 
 
-        <div class="row g-4">
+        <div class="service-detail-benefits">
 
-            <div class="col-md-4">
-                <article class="service-benefit">
-                    <div class="service-benefit__icon">
-                        <i
-                            class="fa-solid fa-shield-halved"
-                            aria-hidden="true"
-                        ></i>
-                    </div>
+            <article class="service-detail-benefit">
+                <div class="service-benefit__icon">
+                    <i
+                        class="fa-solid fa-shield-halved"
+                        aria-hidden="true"
+                    ></i>
+                </div>
 
-                    <h3>
-                        Professional standards
-                    </h3>
+                <h3>
+                    Professional standards
+                </h3>
 
-                    <p>
-                        A structured approach designed to deliver
-                        consistent cleaning results.
-                    </p>
-                </article>
-            </div>
+                <p>
+                    A structured approach designed to deliver
+                    consistent cleaning results.
+                </p>
+            </article>
 
 
-            <div class="col-md-4">
-                <article class="service-benefit">
-                    <div class="service-benefit__icon">
-                        <i
-                            class="fa-solid fa-clock"
-                            aria-hidden="true"
-                        ></i>
-                    </div>
+            <article class="service-detail-benefit">
+                <div class="service-benefit__icon">
+                    <i
+                        class="fa-solid fa-clock"
+                        aria-hidden="true"
+                    ></i>
+                </div>
 
-                    <h3>
-                        Convenient service
-                    </h3>
+                <h3>
+                    Convenient service
+                </h3>
 
-                    <p>
-                        Flexible service options designed around
-                        your property's requirements.
-                    </p>
-                </article>
-            </div>
+                <p>
+                    Flexible service options designed around
+                    your property's requirements.
+                </p>
+            </article>
 
 
-            <div class="col-md-4">
-                <article class="service-benefit">
-                    <div class="service-benefit__icon">
-                        <i
-                            class="fa-solid fa-sparkles"
-                            aria-hidden="true"
-                        ></i>
-                    </div>
+            <article class="service-detail-benefit">
+                <div class="service-benefit__icon">
+                    <i
+                        class="fa-solid fa-sparkles"
+                        aria-hidden="true"
+                    ></i>
+                </div>
 
-                    <h3>
-                        Attention to detail
-                    </h3>
+                <h3>
+                    Attention to detail
+                </h3>
 
-                    <p>
-                        Careful cleaning focused on the areas that
-                        matter most to you.
-                    </p>
-                </article>
-            </div>
+                <p>
+                    Careful cleaning focused on the areas that
+                    matter most to you.
+                </p>
+            </article>
 
         </div>
 
@@ -328,26 +322,27 @@
         </div>
 
 
-        <div class="service-process">
+        <div class="service-detail-process">
 
             {% for step in process_steps %}
 
-                <article class="service-process__step">
+                {% if step.title or step.description %}
+                <article class="service-detail-process__step">
 
-                    <div class="service-process__number">
+                    <div class="service-detail-process__number">
                         {{ forloop.counter|stringformat:"02d" }}
                     </div>
 
-                    <div class="service-process__content">
+                    <div class="service-detail-process__content">
 
                         {% if step.title %}
-                            <h3>
+                            <h3 class="service-detail-process__title">
                                 {{ step.title }}
                             </h3>
                         {% endif %}
 
                         {% if step.description %}
-                            <p>
+                            <p class="service-detail-process__description">
                                 {{ step.description }}
                             </p>
                         {% endif %}
@@ -355,6 +350,7 @@
                     </div>
 
                 </article>
+                {% endif %}
 
             {% endfor %}
 
@@ -376,9 +372,19 @@
 
         <div class="row justify-content-center">
 
-            <div class="col-lg-9">
+            <div class="col-12">
 
-                <div class="service-pricing">
+                <div class="service-pricing{% if not service.image %} service-pricing--no-image{% endif %}">
+
+                    {% if service.image %}
+                    <figure class="service-pricing__image">
+                        <img
+                            src="{{ service.image.url }}"
+                            alt="{{ service.name }} cleaning service"
+                            loading="lazy"
+                        >
+                    </figure>
+                    {% endif %}
 
                     <div class="service-pricing__content">
 
@@ -390,36 +396,24 @@
                             {{ service.name }}
                         </h2>
 
+                        <div class="service-pricing__amount">
+                            <span>Starting from</span>
+                            <strong>KSh {{ service.base_price|floatformat:2 }}</strong>
+                        </div>
+
                         <p>
-                            Prices start from the amount below. Your final
-                            booking price can depend on property size,
+                            Your final booking price may vary based on property size,
                             rooms and any additional services selected.
                         </p>
 
-                    </div>
-
-
-                    <div class="service-pricing__amount">
-
-                        <span>
-                            From
-                        </span>
-
-                        <strong>
-                            KSh {{ service.base_price|floatformat:2 }}
-                        </strong>
-
-                    </div>
-
-
-                    <div class="service-pricing__action">
-
-                        <a
-                            href="{{ service.primary_button_url }}"
-                            class="btn btn-primary"
-                        >
-                            {{ service.primary_button_text|default:"Book Now" }}
-                        </a>
+                        <div class="service-pricing__action">
+                            <a
+                                href="{{ service.primary_button_url }}"
+                                class="btn btn-primary"
+                            >
+                                {{ service.primary_button_text|default:"Book Now" }}
+                            </a>
+                        </div>
 
                     </div>
 
@@ -431,6 +425,9 @@
 
     </div>
 </section>
+
+
+{% include "components/gallery_section.html" with photos=gallery_photos heading=service.name|add:" Gallery" empty_message="There are no gallery photos for this service yet." %}
 
 
 <!-- =========================================================
@@ -574,6 +571,8 @@
 
 </section>
 
+</div>
+
 {% endblock %}
 
 
@@ -583,4 +582,3 @@
         defer
     ></script>
 {% endblock %}
-

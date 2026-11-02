@@ -1,184 +1,143 @@
+
 /* ==========================================
-   HERO SECTION
+   CLEANEX HERO
 ========================================== */
 
 .hero-section {
     position: relative;
+    isolation: isolate;
     overflow: hidden;
 }
-
-/* ==========================================
-   SLIDES
-========================================== */
 
 .hero-slide,
 .hero-single {
     position: relative;
     min-height: 85vh;
+    min-height: 85svh;
     overflow: hidden;
 }
 
-/* ==========================================
-   HERO IMAGE
-========================================== */
-
 .hero-image {
+    position: absolute;
+    inset: 0;
     width: 100%;
-    height: 85vh;
-
+    height: 100%;
     display: block;
-
     object-fit: cover;
-
-    /* Adjust if images still look overly cropped */
-    object-position: center center;
+    object-position: center;
 }
 
-/* ==========================================
-   BLUE OVERLAY
-========================================== */
-
+/* Deep-teal gradient preserves image detail on the right. */
 .hero-overlay {
     position: absolute;
     inset: 0;
-
     z-index: 2;
-
     display: flex;
     align-items: center;
-
-    background:
-        linear-gradient(
-            90deg,
-
-            rgba(0, 82, 163, 0.92) 0%,
-
-            rgba(0, 82, 163, 0.84) 20%,
-
-            rgba(0, 82, 163, 0.68) 40%,
-
-            rgba(0, 82, 163, 0.40) 58%,
-
-            rgba(0, 82, 163, 0.15) 72%,
-
-            rgba(0, 82, 163, 0) 85%
-        );
+    background: linear-gradient(
+        90deg,
+        rgba(18, 59, 58, 0.96) 0%,
+        rgba(18, 59, 58, 0.88) 27%,
+        rgba(18, 59, 58, 0.69) 48%,
+        rgba(18, 59, 58, 0.34) 68%,
+        rgba(18, 59, 58, 0.08) 100%
+    );
 }
-
-/* ==========================================
-   CONTENT
-========================================== */
 
 .hero-content {
     position: relative;
     z-index: 3;
-
     width: 100%;
-    max-width: 750px;
-
-    padding-left: 8%;
-    padding-right: 2%;
+    max-width: 850px;
+    padding: 9rem 2rem 7rem clamp(1.5rem, 8vw, 8rem);
 }
 
-/* ==========================================
-   TITLE
-========================================== */
+.hero-content-inner {
+    max-width: 680px;
+}
 
 .hero-title {
-    color: #ffffff;
-
-    font-size: clamp(2.8rem, 5vw, 5rem);
-
-    font-weight: 700;
-
-    line-height: 1.1;
-
-    letter-spacing: 0.02em;
-
-    margin-bottom: 20px;
-
-    text-shadow:
-        0 2px 8px rgba(0, 40, 90, 0.20),
-        0 4px 20px rgba(0, 82, 163, 0.15);
+    margin: 0 0 1.25rem;
+    color: #F7F8F5;
+    font-size: clamp(2.6rem, 5.2vw, 5rem);
+    font-weight: 750;
+    line-height: 1.06;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+    text-shadow: 0 2px 20px rgba(0, 0, 0, 0.16);
 }
-
-/* ==========================================
-   SUBTITLE
-========================================== */
 
 .hero-subtitle {
-    color: rgba(255, 255, 255, 0.95);
-
-    font-size: 1.15rem;
-
-    line-height: 1.8;
-
-    font-style: italic;
-
-    max-width: 650px;
-
-    margin-bottom: 35px;
-
-    text-shadow:
-        0 2px 6px rgba(0, 40, 90, 0.15);
+    max-width: 610px;
+    margin: 0 0 2rem;
+    color: rgba(247, 248, 245, 0.92);
+    font-size: clamp(1rem, 1.4vw, 1.2rem);
+    font-style: normal;
+    line-height: 1.75;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.18);
 }
-
-/* ==========================================
-   BUTTONS
-========================================== */
 
 .hero-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
+    align-items: center;
+    gap: 0.9rem;
 }
 
-/* Primary Button */
-
-.hero-buttons .btn-primary {
-    background: #ffffff;
-
-    color: #0052a3;
-
-    border: none;
-
-    padding: 14px 30px;
-
+.hero-buttons .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 50px;
+    padding: 0.85rem 1.5rem;
+    border: 1px solid transparent;
     border-radius: 8px;
-
-    font-weight: 600;
-
+    font-weight: 650;
     text-decoration: none;
+    transition:
+        background-color 220ms ease,
+        border-color 220ms ease,
+        color 220ms ease,
+        transform 220ms ease,
+        box-shadow 220ms ease;
+}
 
-    transition: all 0.3s ease;
+/* Primary CTA */
+.hero-buttons .btn-primary {
+    background: #B8E36B;
+    color: #123B3A;
+    border-color: #B8E36B;
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.12);
 }
 
 .hero-buttons .btn-primary:hover {
+    background: #C9ED8B;
+    border-color: #C9ED8B;
+    color: #123B3A;
     transform: translateY(-2px);
+    box-shadow: 0 9px 24px rgba(0, 0, 0, 0.18);
 }
 
-/* Secondary Button */
-
+/* Secondary CTA */
 .hero-buttons .btn-outline-light {
-    background: transparent;
-
-    color: #ffffff;
-
-    border: 2px solid rgba(255,255,255,.85);
-
-    padding: 14px 30px;
-
-    border-radius: 8px;
-
-    font-weight: 600;
-
-    text-decoration: none;
-
-    transition: all 0.3s ease;
+    background: rgba(18, 59, 58, 0.16);
+    color: #FFFFFF;
+    border-color: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 .hero-buttons .btn-outline-light:hover {
+    background: rgba(247, 248, 245, 0.12);
+    border-color: #FFFFFF;
+    color: #FFFFFF;
     transform: translateY(-2px);
+}
+
+.hero-buttons .btn:focus-visible,
+.hero-dot:focus-visible {
+    outline: 3px solid #B8E36B;
+    outline-offset: 4px;
 }
 
 /* ==========================================
@@ -188,19 +147,17 @@
 .hero-carousel {
     position: relative;
     min-height: 85vh;
-
+    min-height: 85svh;
 }
 
 .hero-slide {
     position: absolute;
     inset: 0;
-
     opacity: 0;
     visibility: hidden;
-
     transition:
-        opacity 1s ease,
-        visibility 1s ease;
+        opacity 700ms ease,
+        visibility 700ms ease;
 }
 
 .hero-slide.active {
@@ -208,96 +165,134 @@
     visibility: visible;
 }
 
+.hero-dots {
+    position: absolute;
+    bottom: 2rem;
+    left: clamp(1.5rem, 8vw, 8rem);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.hero-dot {
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    transition:
+        width 220ms ease,
+        background-color 220ms ease;
+}
+
+.hero-dot:hover,
+.hero-dot.active {
+    background: #B8E36B;
+    border-color: #B8E36B;
+}
+
+.hero-dot.active {
+    width: 28px;
+}
 
 /* ==========================================
    RESPONSIVE
 ========================================== */
 
 @media (max-width: 992px) {
-
     .hero-slide,
-    .hero-single,
-    .hero-image {
-        height: 75vh;
+    .hero-single {
         min-height: 75vh;
+        min-height: 75svh;
+    }
+
+    .hero-carousel {
+        min-height: 75vh;
+        min-height: 75svh;
     }
 
     .hero-content {
-        padding-left: 6%;
-        padding-right: 6%;
+        padding: 8rem 2rem 6rem 6%;
     }
 
     .hero-title {
-        font-size: 3rem;
+        font-size: clamp(2.5rem, 6vw, 3.8rem);
+    }
+
+    .hero-dots {
+        left: 6%;
     }
 }
 
 @media (max-width: 768px) {
-
     .hero-slide,
-    .hero-single,
-    .hero-image {
-        height: 65vh;
-        min-height: 65vh;
+    .hero-single {
+        min-height: 72vh;
+        min-height: 72svh;
+    }
+
+    .hero-carousel {
+        min-height: 72vh;
+        min-height: 72svh;
+    }
+
+    .hero-overlay {
+        background: linear-gradient(
+            90deg,
+            rgba(18, 59, 58, 0.92) 0%,
+            rgba(18, 59, 58, 0.78) 65%,
+            rgba(18, 59, 58, 0.48) 100%
+        );
     }
 
     .hero-content {
-        padding-left: 5%;
-        padding-right: 5%;
+        padding: 7.5rem 1.4rem 5.5rem;
     }
 
     .hero-title {
-        font-size: 2.3rem;
+        font-size: clamp(2.2rem, 9vw, 3.2rem);
+        line-height: 1.1;
     }
 
     .hero-subtitle {
         font-size: 1rem;
+        line-height: 1.65;
+        margin-bottom: 1.5rem;
     }
 
     .hero-buttons {
-        flex-direction: column;
-        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .hero-buttons .btn {
+        min-height: 48px;
+        padding: 0.8rem 1.15rem;
+    }
+
+    .hero-dots {
+        left: 1.4rem;
+        bottom: 1.5rem;
     }
 }
 
+@media (max-width: 420px) {
+    .hero-buttons {
+        align-items: stretch;
+        flex-direction: column;
+    }
 
-/* ========================================== */
-
-.hero-content-inner {
-    max-width: 650px;
+    .hero-buttons .btn {
+        width: 100%;
+    }
 }
 
-.hero-dots {
-    position: absolute;
-    bottom: 40px;
-    left: 8%;
-
-    display: flex;
-    gap: 12px;
-
-    z-index: 20;
-}
-
-.hero-dot {
-    width: 12px;
-    height: 12px;
-
-    border-radius: 50%;
-
-    border: none;
-
-    background: rgba(255,255,255,.4);
-
-    cursor: pointer;
-    transition: all .3s ease;
-}
-
-.hero-dot:hover {
-    background: rgba(255,255,255,.8);
-}
-
-
-.hero-dot.active {
-    background: #ffffff;
-    transform: scale(1.2);
+@media (prefers-reduced-motion: reduce) {
+    .hero-slide,
+    .hero-buttons .btn,
+    .hero-dot {
+        transition: none;
+    }
 }

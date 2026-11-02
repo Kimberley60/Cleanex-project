@@ -146,4 +146,13 @@ class ProcessStepAdmin(admin.ModelAdmin):
         "is_active",
     )
 
+    fields = (
+        "step_number",
+        "title",
+        "description",
+        "icon",
+        "image",
+        "is_active",
+    )
+
     ordering = ("step_number",)

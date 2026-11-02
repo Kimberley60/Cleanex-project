@@ -1,0 +1,35 @@
+<section class="gallery-section" aria-labelledby="gallery-section-title">
+    <div class="gallery-section__header">
+        <h2 class="gallery-section__title" id="gallery-section-title">
+            {{ heading }}
+        </h2>
+        {% if description %}
+            <p class="gallery-section__description">{{ description }}</p>
+        {% endif %}
+    </div>
+
+    {% if photos %}
+        <div class="gallery-grid">
+            {% for photo in photos %}
+                <article class="gallery-card">
+                    <figure class="gallery-card__figure">
+                        <img
+                            class="gallery-card__image"
+                            src="{{ photo.image.url }}"
+                            alt="{{ photo.alt_text }}"
+                            loading="lazy"
+                        >
+                        <figcaption class="gallery-card__content">
+                            <h3 class="gallery-card__title">{{ photo.title }}</h3>
+                            {% if photo.caption %}
+                                <p class="gallery-card__caption">{{ photo.caption }}</p>
+                            {% endif %}
+                        </figcaption>
+                    </figure>
+                </article>
+            {% endfor %}
+        </div>
+    {% elif empty_message %}
+        <p class="gallery-empty" role="status">{{ empty_message }}</p>
+    {% endif %}
+</section>

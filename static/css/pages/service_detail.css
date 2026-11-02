@@ -1,487 +1,840 @@
-```css
 /* ==========================================================
    CLEANEX SERVICE DETAIL PAGE
    ========================================================== */
+
+.service-detail-page {
+    color: var(--color-text);
+}
+
+.service-detail-page .hero-single {
+    min-height: 78vh;
+    min-height: 78svh;
+}
 
 /* ==========================================================
    INTERNAL NAVIGATION
    ========================================================== */
 
-.service-detail-nav {
+.service-detail-page .service-detail-nav {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(255, 255, 255, 0.94);
-    border-bottom: 1px solid rgba(20, 61, 82, 0.10);
-    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(247, 248, 245, 0.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
 }
 
-.service-detail-nav__inner {
+.service-detail-page .service-detail-nav__inner {
     display: flex;
-    justify-content: center;
+    min-height: 62px;
     align-items: center;
-    gap: 28px;
-    min-height: 64px;
+    justify-content: center;
+    gap: clamp(1.25rem, 3vw, 2.5rem);
     overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
 }
 
-.service-detail-nav a {
+.service-detail-page .service-detail-nav__inner::-webkit-scrollbar {
+    display: none;
+}
+
+.service-detail-page .service-detail-nav a {
+    position: relative;
+    display: inline-flex;
+    min-height: 62px;
     flex: 0 0 auto;
-    padding: 20px 0;
-    color: #21445a;
-    font-size: 0.9rem;
+    align-items: center;
+    color: var(--color-text-muted);
+    font-size: 0.88rem;
     font-weight: 600;
     text-decoration: none;
-    transition: color 180ms ease;
+    transition: color var(--transition-base);
 }
 
-.service-detail-nav a:hover,
-.service-detail-nav a:focus-visible {
-    color: #087f8c;
+.service-detail-page .service-detail-nav a::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: var(--color-accent);
+    content: "";
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--transition-base);
 }
 
-
-/* ==========================================================
-   GENERAL SECTIONS
-   ========================================================== */
-
-.service-detail-section {
-    padding: 100px 0;
+.service-detail-page .service-detail-nav a:hover,
+.service-detail-page .service-detail-nav a:focus-visible {
+    color: var(--color-brand);
 }
 
-.service-detail-section--white {
-    background: #ffffff;
+.service-detail-page .service-detail-nav a:hover::after,
+.service-detail-page .service-detail-nav a:focus-visible::after {
+    transform: scaleX(1);
 }
 
-.service-detail-section--blue {
-    background: #eef7fa;
-}
-
-.service-detail-section__header {
-    max-width: 760px;
-    margin: 0 auto 52px;
-    text-align: center;
-}
-
-.service-detail-section__label {
-    display: inline-block;
-    margin-bottom: 12px;
-    color: #087f8c;
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-}
-
-.service-detail-section__title {
-    margin-bottom: 18px;
-    color: #123b52;
-    font-size: clamp(2rem, 4vw, 3.25rem);
-    line-height: 1.12;
-    font-weight: 700;
-    letter-spacing: -0.025em;
-}
-
-.service-detail-section__subtitle {
-    max-width: 650px;
-    margin: 0 auto;
-    color: #5c7180;
-    font-size: 1rem;
-    line-height: 1.75;
-}
-
-
-/* ==========================================================
-   OVERVIEW
-   ========================================================== */
-
-.service-detail-overview__description {
-    color: #536b79;
-    font-size: 1.05rem;
-    line-height: 1.9;
-}
-
-.service-detail-info-panel {
-    border: 1px solid rgba(20, 61, 82, 0.10);
-    background: #f8fbfc;
-    box-shadow: 0 16px 40px rgba(21, 59, 78, 0.08);
-}
-
-.service-detail-info-panel__header {
-    padding: 22px 26px;
-    background: #123b52;
-    color: #ffffff;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-}
-
-.service-detail-info-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 20px;
-    padding: 20px 26px;
-    border-bottom: 1px solid rgba(20, 61, 82, 0.08);
-}
-
-.service-detail-info-row:last-child {
-    border-bottom: 0;
-}
-
-.service-detail-info-row__label {
-    color: #70838e;
-    font-size: 0.9rem;
-}
-
-.service-detail-info-row__value {
-    color: #123b52;
-    font-weight: 700;
-    text-align: right;
-}
-
-
-/* ==========================================================
-   SERVICE FEATURES
-   ========================================================== */
-
-.service-feature {
-    display: flex;
-    gap: 20px;
-    height: 100%;
-    padding: 28px;
-    background: #ffffff;
-    border: 1px solid rgba(20, 61, 82, 0.08);
-    transition:
-        transform 180ms ease,
-        box-shadow 180ms ease,
-        border-color 180ms ease;
-}
-
-.service-feature:hover {
-    transform: translateY(-4px);
-    border-color: rgba(8, 127, 140, 0.25);
-    box-shadow: 0 16px 36px rgba(21, 59, 78, 0.08);
-}
-
-.service-feature__icon {
-    flex: 0 0 48px;
-    width: 48px;
-    height: 48px;
-    display: grid;
-    place-items: center;
-    background: #087f8c;
-    color: #ffffff;
-    font-size: 1rem;
-}
-
-.service-feature__title {
-    margin: 0 0 8px;
-    color: #123b52;
-    font-size: 1.05rem;
-    font-weight: 700;
-}
-
-.service-feature__description {
-    margin: 0;
-    color: #617682;
-    line-height: 1.7;
-}
-
-
-/* ==========================================================
-   BENEFITS
-   ========================================================== */
-
-.service-benefit {
-    height: 100%;
-    padding: 32px;
-    border-top: 3px solid #087f8c;
-    background: #ffffff;
-}
-
-.service-benefit__icon {
-    width: 52px;
-    height: 52px;
-    display: grid;
-    place-items: center;
-    margin-bottom: 22px;
-    background: #e4f5f1;
-    color: #087f8c;
-    font-size: 1.15rem;
-}
-
-.service-benefit h3 {
-    margin-bottom: 12px;
-    color: #123b52;
-    font-size: 1.1rem;
-    font-weight: 700;
-}
-
-.service-benefit p {
-    margin: 0;
-    color: #617682;
-    line-height: 1.75;
-}
-
-
-/* ==========================================================
-   PROCESS
-   ========================================================== */
-
-.service-process-step {
-    height: 100%;
-    padding: 30px;
-    background: #ffffff;
-    border: 1px solid rgba(20, 61, 82, 0.08);
-}
-
-.service-process-step__number {
-    margin-bottom: 18px;
-    color: #087f8c;
-    font-size: 0.8rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-}
-
-.service-process-step__icon {
-    margin-bottom: 20px;
-    color: #123b52;
-    font-size: 1.5rem;
-}
-
-.service-process-step h3 {
-    margin-bottom: 10px;
-    color: #123b52;
-    font-size: 1.05rem;
-}
-
-.service-process-step p {
-    margin: 0;
-    color: #617682;
-    line-height: 1.7;
-}
-
-
-/* ==========================================================
-   PRICING
-   ========================================================== */
-
-.service-pricing-panel {
-    display: grid;
-    grid-template-columns: 1.5fr 0.8fr auto;
-    gap: 42px;
-    align-items: center;
-    padding: 48px;
-    background: #123b52;
-    color: #ffffff;
-}
-
-.service-pricing-panel__content h2 {
-    margin: 0 0 14px;
-    font-size: clamp(1.8rem, 3vw, 2.6rem);
-    line-height: 1.15;
-}
-
-.service-pricing-panel__content p {
-    max-width: 620px;
-    margin: 0;
-    color: rgba(255, 255, 255, 0.78);
-    line-height: 1.75;
-}
-
-.service-pricing-panel__price {
-    display: flex;
-    flex-direction: column;
-}
-
-.service-pricing-panel__price span {
-    color: rgba(255, 255, 255, 0.65);
-    font-size: 0.85rem;
-}
-
-.service-pricing-panel__price strong {
-    margin: 5px 0;
-    font-size: 2.2rem;
-}
-
-.service-pricing-panel__price small {
-    color: rgba(255, 255, 255, 0.65);
-}
-
-.service-pricing-panel__actions {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-
-/* ==========================================================
-   FAQ
-   ========================================================== */
-
-.service-faq-accordion {
-    max-width: 900px;
-    margin: 0 auto;
-}
-
-.service-faq {
-    margin-bottom: 12px;
-    border: 1px solid rgba(20, 61, 82, 0.10) !important;
-    border-radius: 0 !important;
-    overflow: hidden;
-}
-
-.service-faq__question {
-    min-height: 64px;
-    color: #123b52;
-    font-weight: 700;
-    box-shadow: none !important;
-}
-
-.service-faq__question:not(.collapsed) {
-    background: #ffffff;
-    color: #087f8c;
-}
-
-.service-faq__answer {
-    color: #617682;
-    line-height: 1.8;
-    background: #ffffff;
-}
-
-
-/* ==========================================================
-   FINAL CTA
-   ========================================================== */
-
-.service-detail-final-cta {
-    padding: 110px 0;
-    background: #087f8c;
-}
-
-.service-detail-final-cta__inner {
-    max-width: 760px;
-    margin: 0 auto;
-    text-align: center;
-    color: #ffffff;
-}
-
-.service-detail-final-cta .service-detail-section__label {
-    color: #c8eee6;
-}
-
-.service-detail-final-cta h2 {
-    margin-bottom: 18px;
-    font-size: clamp(2rem, 4vw, 3.4rem);
-    line-height: 1.1;
-}
-
-.service-detail-final-cta p {
-    margin: 0 auto 30px;
-    max-width: 600px;
-    color: rgba(255, 255, 255, 0.86);
-    line-height: 1.75;
-}
-
-
-/* ==========================================================
-   FOCUS STATES
-   ========================================================== */
-
-.service-detail-nav a:focus-visible,
-.service-detail-hero a:focus-visible,
-.service-pricing-panel a:focus-visible,
-.service-detail-final-cta a:focus-visible {
-    outline: 3px solid #b8eadc;
+.service-detail-page .service-detail-nav a:focus-visible,
+.service-detail-page .service-pricing a:focus-visible,
+.service-detail-page .service-detail-cta a:focus-visible {
+    outline: 2px solid var(--color-accent);
     outline-offset: 4px;
 }
 
+/* ==========================================================
+   SECTION RHYTHM AND HEADINGS
+   ========================================================== */
+
+.service-detail-page .service-detail-section {
+    padding: clamp(4rem, 7vw, 6.5rem) 0;
+    scroll-margin-top: 82px;
+}
+
+.service-detail-page .service-detail-section--light {
+    background: var(--color-surface);
+}
+
+.service-detail-page .service-detail-section--blue {
+    background: var(--color-surface-sage);
+}
+
+.service-detail-page .service-detail-section__heading {
+    max-width: 760px;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+}
+
+.service-detail-page .service-detail-section__heading--center {
+    margin-right: auto;
+    margin-left: auto;
+    text-align: center;
+}
+
+.service-detail-page .service-detail-section__heading .section-eyebrow,
+.service-detail-page .service-detail-info__header .section-eyebrow,
+.service-detail-page .service-pricing__content .section-eyebrow,
+.service-detail-page .service-detail-cta__content .section-eyebrow {
+    display: inline-block;
+    margin-bottom: var(--space-2);
+    color: var(--color-brand);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    line-height: 1.4;
+    text-transform: uppercase;
+}
+
+.service-detail-page .service-detail-section__heading h2 {
+    margin: 0 0 var(--space-3);
+    color: var(--color-text);
+    font-size: clamp(1.9rem, 4vw, 2.7rem);
+    font-weight: 650;
+    line-height: 1.18;
+    letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+
+.service-detail-page .service-detail-section__heading p {
+    max-width: 650px;
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+.service-detail-page .service-detail-section__heading--center p {
+    margin-right: auto;
+    margin-left: auto;
+}
+
+/* ==========================================================
+   SERVICE OVERVIEW
+   ========================================================== */
+
+.service-detail-page .service-detail-overview__description {
+    max-width: var(--content-width-reading);
+    color: var(--color-text-muted);
+    font-size: 1.02rem;
+    line-height: 1.85;
+    overflow-wrap: anywhere;
+}
+
+.service-detail-page .service-detail-overview__description p {
+    margin: 0 0 var(--space-4);
+    color: inherit;
+}
+
+.service-detail-page .service-detail-info {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+    box-shadow: var(--shadow-card);
+}
+
+.service-detail-page .service-detail-info__header {
+    padding: var(--space-5) var(--space-6);
+    background: var(--color-brand);
+    color: var(--color-on-brand);
+}
+
+.service-detail-page .service-detail-info__header .section-eyebrow {
+    margin-bottom: var(--space-1);
+    color: var(--color-accent);
+}
+
+.service-detail-page .service-detail-info__header h3 {
+    margin: 0;
+    color: var(--color-on-brand);
+    font-size: 1.25rem;
+    font-weight: 650;
+}
+
+.service-detail-page .service-detail-info__item {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-6);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.service-detail-page .service-detail-info__item:last-child {
+    border-bottom: 0;
+}
+
+.service-detail-page .service-detail-info__label {
+    flex: 0 1 auto;
+    color: var(--color-text-muted);
+    font-size: 0.88rem;
+}
+
+.service-detail-page .service-detail-info__value {
+    min-width: 0;
+    color: var(--color-text);
+    font-size: 0.92rem;
+    font-weight: 650;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+/* ==========================================================
+   WHAT'S INCLUDED
+   ========================================================== */
+
+.service-detail-page .service-features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    gap: var(--space-4);
+}
+
+.service-detail-page .service-feature {
+    display: flex;
+    min-width: 0;
+    min-height: 100%;
+    gap: var(--space-4);
+    padding: clamp(1.25rem, 2.5vw, 1.75rem);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+    transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.service-detail-page .service-feature:hover {
+    transform: translateY(-3px);
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-card);
+}
+
+.service-detail-page .service-feature__icon {
+    display: grid;
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-sage);
+    color: var(--color-brand);
+    font-size: 1rem;
+}
+
+.service-detail-page .service-feature__content {
+    min-width: 0;
+}
+
+.service-detail-page .service-feature__title {
+    margin: 0 0 var(--space-2);
+    color: var(--color-text);
+    font-size: 1.02rem;
+    font-weight: 650;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.service-detail-page .service-feature__description {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.92rem;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+}
+
+.service-detail-page .service-detail-empty {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: var(--space-6);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    text-align: center;
+}
+
+.service-detail-page .service-detail-empty p {
+    margin: 0;
+    color: var(--color-text-muted);
+}
+
+/* ==========================================================
+   WHY CLEANEX
+   ========================================================== */
+
+.service-detail-page .service-detail-benefits {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.service-detail-page .service-detail-benefit {
+    min-width: 0;
+    padding: var(--space-6) clamp(1rem, 3vw, 2.5rem);
+}
+
+.service-detail-page .service-detail-benefit + .service-detail-benefit {
+    border-left: 1px solid var(--color-border);
+}
+
+.service-detail-page .service-benefit__icon {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    margin-bottom: var(--space-4);
+    border-radius: 50%;
+    background: var(--color-surface-sage);
+    color: var(--color-brand);
+    font-size: 1rem;
+}
+
+.service-detail-page .service-detail-benefit h3 {
+    margin: 0 0 var(--space-2);
+    color: var(--color-text);
+    font-size: 1.05rem;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.service-detail-page .service-detail-benefit p {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.92rem;
+    line-height: 1.7;
+}
+
+/* ==========================================================
+   SERVICE-SPECIFIC PROCESS TIMELINE
+   ========================================================== */
+
+.service-detail-page .service-detail-process {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: var(--space-5);
+}
+
+.service-detail-page .service-detail-process::before {
+    position: absolute;
+    top: 21px;
+    right: 8%;
+    left: 8%;
+    height: 1px;
+    background: var(--color-border-strong);
+    content: "";
+}
+
+.service-detail-page .service-detail-process__step {
+    position: relative;
+    min-width: 0;
+}
+
+.service-detail-page .service-detail-process__number {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    margin: 0 auto var(--space-4);
+    border: 1px solid var(--color-brand);
+    border-radius: 50%;
+    background: var(--color-brand);
+    color: var(--color-accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.service-detail-page .service-detail-process__content {
+    max-width: 28rem;
+    margin: 0 auto;
+    padding-right: var(--space-3);
+    text-align: center;
+}
+
+.service-detail-page .service-detail-process__title {
+    margin: 0 0 var(--space-2);
+    color: var(--color-text);
+    font-size: 1.05rem;
+    font-weight: 650;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.service-detail-page .service-detail-process__description {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.92rem;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+
+/* ==========================================================
+   SERVICE PRICING FEATURE
+   ========================================================== */
+
+.service-detail-page .service-pricing {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    max-width: 1100px;
+    min-height: 390px;
+    overflow: hidden;
+    margin: 0 auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-brand);
+    box-shadow: var(--shadow-card);
+}
+
+.service-detail-page .service-pricing__image {
+    min-width: 0;
+    min-height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--color-surface-sage);
+}
+
+.service-detail-page .service-pricing__image img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 390px;
+    object-fit: cover;
+}
+
+.service-detail-page .service-pricing__content {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding: clamp(1.75rem, 4.5vw, 3.75rem);
+    color: var(--color-on-brand);
+}
+
+.service-detail-page .service-pricing__content .section-eyebrow {
+    color: var(--color-accent);
+}
+
+.service-detail-page .service-pricing__content h2 {
+    max-width: 18ch;
+    margin: 0 0 var(--space-5);
+    color: var(--color-on-brand);
+    font-size: clamp(1.65rem, 3.2vw, 2.4rem);
+    font-weight: 650;
+    line-height: 1.18;
+    letter-spacing: -0.025em;
+    overflow-wrap: anywhere;
+}
+
+.service-detail-page .service-pricing__amount {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-bottom: var(--space-4);
+}
+
+.service-detail-page .service-pricing__amount span {
+    color: var(--color-on-brand);
+    font-size: 0.88rem;
+    opacity: 0.78;
+}
+
+.service-detail-page .service-pricing__amount strong {
+    color: var(--color-accent);
+    font-size: clamp(1.8rem, 3vw, 2.3rem);
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.service-detail-page .service-pricing__content > p {
+    max-width: 42ch;
+    margin: 0 0 var(--space-5);
+    color: var(--color-on-brand);
+    font-size: 0.92rem;
+    line-height: 1.7;
+    opacity: 0.84;
+}
+
+.service-detail-page .service-pricing__action .btn,
+.service-detail-page .service-detail-cta__actions .btn {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    padding: 0.7rem 1.25rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 650;
+    line-height: 1.4;
+    text-align: center;
+    text-decoration: none;
+    white-space: normal;
+    transition:
+        color var(--transition-base),
+        background-color var(--transition-base),
+        border-color var(--transition-base),
+        transform var(--transition-base);
+}
+
+.service-detail-page .service-pricing__action .btn-primary,
+.service-detail-page .service-detail-cta__actions .btn-primary {
+    border: 1px solid var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+}
+
+.service-detail-page .service-pricing__action .btn-primary:hover,
+.service-detail-page .service-detail-cta__actions .btn-primary:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    filter: brightness(0.95);
+}
+
+.service-detail-page .service-pricing--no-image {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.service-detail-page .service-pricing--no-image .service-pricing__content {
+    min-height: 340px;
+}
+
+/* ==========================================================
+   FAQ ACCORDION
+   ========================================================== */
+
+.service-detail-page .service-faqs {
+    max-width: 880px;
+    margin: 0 auto;
+}
+
+.service-detail-page .service-faq {
+    overflow: hidden;
+    margin-bottom: var(--space-3);
+    border: 1px solid var(--color-border) !important;
+    border-radius: var(--radius-sm) !important;
+    background: var(--color-surface-raised);
+}
+
+.service-detail-page .service-faq:last-child {
+    margin-bottom: 0;
+}
+
+.service-detail-page .service-faq__question {
+    min-height: 62px;
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+    font-size: 0.98rem;
+    font-weight: 650;
+    line-height: 1.5;
+    box-shadow: none;
+}
+
+.service-detail-page .service-faq__question:not(.collapsed) {
+    background: var(--color-surface);
+    color: var(--color-brand);
+}
+
+.service-detail-page .service-faq__question:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--color-brand);
+    outline-offset: -3px;
+    box-shadow: none;
+}
+
+.service-detail-page .service-faq__answer {
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface-raised);
+    color: var(--color-text-muted);
+    line-height: 1.75;
+}
+
+.service-detail-page .service-faq__answer p:last-child {
+    margin-bottom: 0;
+}
+
+/* ==========================================================
+   FINAL BOOKING CTA
+   ========================================================== */
+
+.service-detail-page .service-detail-cta {
+    padding: clamp(4rem, 7vw, 6.5rem) 0;
+    background: var(--color-brand);
+    color: var(--color-on-brand);
+}
+
+.service-detail-page .service-detail-cta__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: clamp(2rem, 5vw, 4rem);
+}
+
+.service-detail-page .service-detail-cta__content {
+    max-width: 680px;
+}
+
+.service-detail-page .service-detail-cta__content .section-eyebrow {
+    color: var(--color-accent);
+}
+
+.service-detail-page .service-detail-cta__content h2 {
+    margin: 0 0 var(--space-3);
+    color: var(--color-on-brand);
+    font-size: clamp(1.9rem, 4vw, 2.8rem);
+    font-weight: 650;
+    line-height: 1.18;
+    letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+
+.service-detail-page .service-detail-cta__content p {
+    max-width: 58ch;
+    margin: 0;
+    color: var(--color-on-brand);
+    line-height: 1.7;
+    opacity: 0.84;
+}
+
+.service-detail-page .service-detail-cta__actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.service-detail-page .service-detail-cta__actions .btn-outline-light {
+    border: 1px solid rgba(247, 248, 245, 0.72);
+    background: transparent;
+    color: var(--color-on-brand);
+}
+
+.service-detail-page .service-detail-cta__actions .btn-outline-light:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-on-brand);
+    background: rgba(247, 248, 245, 0.1);
+    color: var(--color-on-brand);
+}
 
 /* ==========================================================
    RESPONSIVE
    ========================================================== */
 
 @media (max-width: 991.98px) {
-
-    .service-detail-hero {
-        min-height: 560px;
+    .service-detail-page .service-detail-benefit {
+        padding-right: var(--space-4);
+        padding-left: var(--space-4);
     }
 
-    .service-detail-section {
-        padding: 80px 0;
+    .service-detail-page .service-detail-process {
+        gap: var(--space-4);
     }
 
-    .service-pricing-panel {
-        grid-template-columns: 1fr 1fr;
+    .service-detail-page .service-pricing {
+        min-height: 350px;
     }
 
-    .service-pricing-panel__actions {
-        grid-column: 1 / -1;
-        flex-direction: row;
-        flex-wrap: wrap;
+    .service-detail-page .service-pricing__image img {
+        min-height: 350px;
     }
 
+    .service-detail-page .service-detail-cta__inner {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: var(--space-6);
+    }
 }
-
 
 @media (max-width: 767.98px) {
-
-    .service-detail-hero {
-        min-height: 520px;
+    .service-detail-page .hero-single {
+        min-height: 72vh;
+        min-height: 72svh;
     }
 
-    .service-detail-hero__content {
-        padding: 100px 0 70px;
-    }
-
-    .service-detail-hero__actions {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .service-detail-hero__actions .btn {
-        width: 100%;
-    }
-
-    .service-detail-nav__inner {
+    .service-detail-page .service-detail-nav__inner {
         justify-content: flex-start;
-        gap: 22px;
+        gap: var(--space-6);
     }
 
-    .service-detail-section {
-        padding: 68px 0;
+    .service-detail-page .service-detail-section {
+        padding: var(--space-12) 0;
+        scroll-margin-top: 72px;
     }
 
-    .service-feature {
-        padding: 24px;
+    .service-detail-page .service-detail-benefits {
+        grid-template-columns: minmax(0, 1fr);
     }
 
-    .service-pricing-panel {
-        grid-template-columns: 1fr;
-        padding: 32px 26px;
-        gap: 28px;
+    .service-detail-page .service-detail-benefit {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        column-gap: var(--space-4);
+        padding: var(--space-5) 0;
     }
 
-    .service-pricing-panel__actions {
-        grid-column: auto;
-        flex-direction: column;
+    .service-detail-page .service-detail-benefit + .service-detail-benefit {
+        border-top: 1px solid var(--color-border);
+        border-left: 0;
     }
 
-    .service-pricing-panel__actions .btn {
+    .service-detail-page .service-benefit__icon {
+        grid-row: span 2;
+        margin-bottom: 0;
+    }
+
+    .service-detail-page .service-detail-benefit h3 {
+        align-self: center;
+    }
+
+    .service-detail-page .service-detail-process {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-5);
+    }
+
+    .service-detail-page .service-detail-process::before {
+        top: 22px;
+        right: auto;
+        bottom: 22px;
+        left: 21px;
+        width: 1px;
+        height: auto;
+    }
+
+    .service-detail-page .service-detail-process__step {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        gap: var(--space-4);
+        align-items: start;
+    }
+
+    .service-detail-page .service-detail-process__number {
+        margin: 0;
+    }
+
+    .service-detail-page .service-detail-process__content {
+        max-width: none;
+        margin: 0;
+        padding-top: var(--space-2);
+        padding-right: 0;
+        text-align: left;
+    }
+
+    .service-detail-page .service-pricing {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 0;
+    }
+
+    .service-detail-page .service-pricing__image {
+        aspect-ratio: 16 / 10;
+    }
+
+    .service-detail-page .service-pricing__image img {
+        min-height: 0;
+    }
+
+    .service-detail-page .service-pricing__content {
+        padding: clamp(1.5rem, 7vw, 2.25rem);
+    }
+
+    .service-detail-page .service-pricing--no-image .service-pricing__content {
+        min-height: 0;
+    }
+
+    .service-detail-page .service-pricing__action,
+    .service-detail-page .service-pricing__action .btn {
         width: 100%;
     }
 
+    .service-detail-page .service-detail-cta__actions {
+        width: 100%;
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .service-detail-page .service-detail-cta__actions .btn {
+        width: 100%;
+    }
 }
 
+@media (max-width: 575.98px) {
+    .service-detail-page .service-detail-info__item {
+        gap: var(--space-3);
+        padding-right: var(--space-4);
+        padding-left: var(--space-4);
+    }
+
+    .service-detail-page .service-detail-info__header {
+        padding-right: var(--space-4);
+        padding-left: var(--space-4);
+    }
+
+    .service-detail-page .service-faq__question {
+        padding-right: var(--space-4);
+        padding-left: var(--space-4);
+    }
+}
 
 @media (prefers-reduced-motion: reduce) {
-
-    .service-feature,
-    .service-detail-nav a {
+    .service-detail-page .service-detail-nav a,
+    .service-detail-page .service-detail-nav a::after,
+    .service-detail-page .service-feature,
+    .service-detail-page .service-pricing__action .btn,
+    .service-detail-page .service-detail-cta__actions .btn {
         transition: none;
     }
 
-    html {
-        scroll-behavior: auto;
+    .service-detail-page .service-feature:hover,
+    .service-detail-page .service-pricing__action .btn:hover,
+    .service-detail-page .service-detail-cta__actions .btn:hover {
+        transform: none;
     }
-
 }

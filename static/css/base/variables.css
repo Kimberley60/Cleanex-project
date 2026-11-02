@@ -1,0 +1,67 @@
+:root {
+    /* Cleanex brand palette */
+    --color-brand: #123B3A;
+    --color-surface: #F7F8F5;
+    --color-surface-sand: #E9E0D1;
+    --color-accent: #B8E36B;
+    --color-text: #293633;
+    --color-surface-sage: #DCEBE7;
+    --color-on-brand: #F7F8F5;
+    --color-on-accent: #123B3A;
+
+    /* Supporting colors */
+    --color-white: #ffffff;
+    --color-surface-raised: #ffffff;
+    --color-text-muted: #596763;
+    --color-border: #d5dfdc;
+    --color-border-strong: #b9c9c4;
+
+    /* Typography */
+    --font-sans: system-ui, -apple-system, sans-serif;
+    --font-primary: var(--font-sans);
+
+    /* Spacing */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-10: 2.5rem;
+    --space-12: 3rem;
+    --space-16: 4rem;
+    --space-20: 5rem;
+
+    /* Content widths */
+    --content-width: 1200px;
+    --content-width-reading: 65ch;
+
+    /* Borders and radii */
+    --radius-none: 0;
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius: var(--radius-md);
+    --border-width: 1px;
+
+    /* Shadows and transitions */
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+    --shadow-card: 0 12px 30px rgba(18, 59, 58, 0.08);
+    --shadow-card-hover: 0 18px 38px rgba(18, 59, 58, 0.14);
+    --transition-fast: 150ms ease;
+    --transition-base: 220ms ease;
+
+    /* Legacy tokens retained until individual pages are migrated. */
+    --primary: #1E88E5;
+    --secondary: #1565C0;
+    --success: #43A047;
+    --danger: #E53935;
+    --white: #ffffff;
+    --light: #f8f9fa;
+    --gray: #6c757d;
+    --dark: #212529;
+    --section-bg: #f4f8fc;
+    --section-padding: 80px;
+}

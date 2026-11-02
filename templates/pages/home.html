@@ -4,6 +4,8 @@
 
 {% block content %}
 
+<div class="home-page">
+
 {% include "includes/hero.html" %}
 
 
@@ -41,10 +43,10 @@
 
 
 <!-- ================= SERVICES ================= -->
-<section class="section section-white">
+<section class="section section-white home-services-section">
   <div class="container">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 home-services-heading">
       <h2>Our Services</h2>
       <a href="/services/" class="btn btn-outline-primary btn-sm">View All</a>
     </div>
@@ -63,14 +65,14 @@
 </section>
 
 <!-- ================= HOW IT WORKS ================= -->
-<section class="section section-light">
+<section class="section section-light home-process-shell">
 
     {% include "includes/how_it_works.html" %}
 
 </section>
 
 <!-- ================= WHY CHOOSE US ================= -->
-<section class="section section-white">
+<section class="section section-white home-why-shell">
 
     {% include "components/why_choose.html" %}
 
@@ -78,22 +80,20 @@
 
 
 <!-- ================= TESTIMONIALS ================= -->
-<section class="section section-light">
-
-
-      {% for testimonial in testimonials %}
-        {% include "components/testimonial_card.html" %}
-      {% empty %}
-        <p class="text-center">No testimonials yet.</p>
-      {% endfor %}
-
-
-</section>
+{% if testimonials %}
+    {% include "components/testimonial_card.html" %}
+{% else %}
+    <section class="section section-light testimonial-empty-state">
+        <div class="container">
+            <p class="text-center">No testimonials yet.</p>
+        </div>
+    </section>
+{% endif %}
 
 
 
 <!-- ================= FAQS ================= -->
-<section class="section section-white">
+<section class="section section-white home-faq-shell">
 
     {% include "includes/faqs.html" %}
 
@@ -101,7 +101,7 @@
 
 
 <!-- ================= CTA ================= -->
-<section class="section section-dark text-center">
+<section class="section section-dark text-center home-cta">
   <div class="container">
 
     <h2>Ready for a Cleaner Home?</h2>
@@ -113,5 +113,7 @@
 
   </div>
 </section>
+
+</div>
 
 {% endblock %}

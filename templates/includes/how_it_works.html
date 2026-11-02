@@ -24,23 +24,42 @@
 
             {% for step in process_steps %}
 
-            <div class="process-card {% cycle 'left' 'right' %}">
+            <div class="process-row {% cycle 'process-row--left' 'process-row--right' %}">
 
-                <div class="step-number">
-                    {{ step.step_number|stringformat:"02d" }}
-                </div>
+                <article class="process-card">
 
-                <div class="step-icon">
-                    <i class="{{ step.icon }}"></i>
-                </div>
+                    <div class="step-number">
+                        {{ step.step_number|stringformat:"02d" }}
+                    </div>
 
-                <h3>
-                    {{ step.title }}
-                </h3>
+                    <div class="step-icon">
+                        <i class="{{ step.icon }}" aria-hidden="true"></i>
+                    </div>
 
-                <p>
-                    {{ step.description }}
-                </p>
+                    <h3>
+                        {{ step.title }}
+                    </h3>
+
+                    <p>
+                        {{ step.description }}
+                    </p>
+
+                </article>
+
+                {% if step.image %}
+                    <figure class="process-image">
+                        <img
+                            src="{{ step.image.url }}"
+                            alt="{{ step.title }} - CLEANEX process step"
+                            loading="lazy"
+                        >
+                    </figure>
+                {% else %}
+                    <div class="process-image process-image--placeholder" aria-hidden="true">
+                        <i class="{{ step.icon }}"></i>
+                        <span>{{ step.title }}</span>
+                    </div>
+                {% endif %}
 
             </div>
 

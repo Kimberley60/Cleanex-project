@@ -96,6 +96,12 @@ class ProcessStep(models.Model):
         help_text="Font Awesome class"
     )
 
+    image = models.ImageField(
+        upload_to="process_steps/",
+        blank=True,
+        null=True
+    )
+
     is_active = models.BooleanField(
         default=True
     )

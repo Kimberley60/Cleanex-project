@@ -1,0 +1,177 @@
+{% extends "base/base.html" %}
+
+{% block title %}Gallery | CLEANEX{% endblock %}
+
+{% block content %}
+<div class="gallery-page">
+    <header class="gallery-intro">
+        <div class="gallery-container">
+            <p class="gallery-eyebrow">CLEANEX results</p>
+            <h1 class="gallery-intro__title">A closer look at our work</h1>
+            <p class="gallery-intro__text">
+                Explore cleaning results from across our services and see the care
+                CLEANEX brings to every space.
+            </p>
+        </div>
+    </header>
+
+    <div class="gallery-container gallery-page__content">
+        <section class="gallery-filters" aria-labelledby="gallery-filters-title">
+            <h2 class="gallery-filters__title" id="gallery-filters-title">
+                Find results by service
+            </h2>
+            <form class="gallery-filters__form" method="get" action="{% url 'gallery' %}">
+                <div class="gallery-filter">
+                    <label class="gallery-filter__label" for="gallery-service-filter">
+                        Service
+                    </label>
+                    <select
+                        class="gallery-filter__control"
+                        id="gallery-service-filter"
+                        name="service"
+                    >
+                        <option value="">All services</option>
+                        {% for service_option in services %}
+                            <option
+                                value="{{ service_option.slug }}"
+                                {% if selected_service.pk == service_option.pk %}selected{% endif %}
+                            >
+                                {{ service_option.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="gallery-filter">
+                    <label class="gallery-filter__label" for="gallery-category-filter">
+                        Category
+                    </label>
+                    <select
+                        class="gallery-filter__control"
+                        id="gallery-category-filter"
+                        name="category"
+                    >
+                        <option value="">All categories</option>
+                        {% for category_option in categories %}
+                            <option
+                                value="{{ category_option.slug }}"
+                                {% if selected_category.pk == category_option.pk %}selected{% endif %}
+                            >
+                                {{ category_option.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="gallery-filters__actions">
+                    <button class="gallery-button" type="submit">Apply filters</button>
+                    <a class="gallery-reset" href="{% url 'gallery' %}">Clear filters</a>
+                </div>
+            </form>
+        </section>
+
+        {% include "components/gallery_section.html" with photos=photos heading="Our service gallery" description="Browse individual photos from our completed cleaning services." empty_message="No photos match these filters. Try another service or category." %}
+
+        {% if page_obj.paginator.num_pages > 1 %}
+            <nav class="gallery-pagination" aria-label="Gallery pages">
+                {% if page_obj.has_previous %}
+                    <a
+                        class="gallery-pagination__link gallery-pagination__link--previous"
+                        href="?{% if pagination_query %}{{ pagination_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}"
+                        rel="prev"
+                    >
+                        <span aria-hidden="true">&larr;</span> Previous
+                    </a>
+                {% else %}
+                    <span class="gallery-pagination__link gallery-pagination__link--disabled" aria-disabled="true">
+                        <span aria-hidden="true">&larr;</span> Previous
+                    </span>
+                {% endif %}
+
+                <span class="gallery-pagination__status">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+
+                {% if page_obj.has_next %}
+                    <a
+                        class="gallery-pagination__link gallery-pagination__link--next"
+                        href="?{% if pagination_query %}{{ pagination_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}"
+                        rel="next"
+                    >
+                        Next <span aria-hidden="true">&rarr;</span>
+                    </a>
+                {% else %}
+                    <span class="gallery-pagination__link gallery-pagination__link--disabled" aria-disabled="true">
+                        Next <span aria-hidden="true">&rarr;</span>
+                    </span>
+                {% endif %}
+            </nav>
+        {% endif %}
+
+        {% if gallery %}
+            <section class="gallery-before-after" aria-labelledby="gallery-before-after-title">
+                <div class="gallery-section__header">
+                    <p class="gallery-eyebrow">Before &amp; after</p>
+                    <h2 class="gallery-section__title" id="gallery-before-after-title">
+                        The difference is in the details
+                    </h2>
+                    <p class="gallery-section__description">
+                        Before-and-after examples from our cleaning projects.
+                    </p>
+                </div>
+
+                <div class="gallery-before-after__grid">
+                    {% for item in gallery %}
+                        <article class="gallery-comparison">
+                            <div class="gallery-comparison__heading">
+                                <h3 class="gallery-comparison__title">{{ item.title }}</h3>
+                                {% if item.description %}
+                                    <p class="gallery-comparison__description">
+                                        {{ item.description }}
+                                    </p>
+                                {% endif %}
+                            </div>
+                            <div class="gallery-comparison__images">
+                                <figure class="gallery-comparison__figure">
+                                    {% if item.before_image %}
+                                        <img
+                                            class="gallery-comparison__image"
+                                            src="{{ item.before_image.url }}"
+                                            alt="{{ item.title }} — before cleaning"
+                                            loading="lazy"
+                                        >
+                                    {% else %}
+                                        <div class="gallery-comparison__missing" role="img" aria-label="Before image unavailable">
+                                            Image unavailable
+                                        </div>
+                                    {% endif %}
+                                    <figcaption class="gallery-comparison__label">
+                                        Before
+                                    </figcaption>
+                                </figure>
+                                <figure class="gallery-comparison__figure">
+                                    {% if item.after_image %}
+                                        <img
+                                            class="gallery-comparison__image"
+                                            src="{{ item.after_image.url }}"
+                                            alt="{{ item.title }} — after cleaning"
+                                            loading="lazy"
+                                        >
+                                    {% else %}
+                                        <div class="gallery-comparison__missing" role="img" aria-label="After image unavailable">
+                                            Image unavailable
+                                        </div>
+                                    {% endif %}
+                                    <figcaption class="gallery-comparison__label">
+                                        After
+                                    </figcaption>
+                                </figure>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

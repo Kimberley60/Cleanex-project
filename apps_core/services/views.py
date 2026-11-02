@@ -1,5 +1,6 @@
 from django.db.models import Q
 from django.views.generic import ListView, DetailView
+from apps_core.gallery.models import GalleryPhoto
 from apps_core.services.models import Service, ServiceCategory
 from apps_core.website.models import HeroSection
 
@@ -128,6 +129,22 @@ class ServiceDetailView(DetailView):
 
         service = self.object
 
+        context["gallery_photos"] = (
+            GalleryPhoto.objects
+            .filter(
+                service=service,
+                is_active=True,
+            )
+            .select_related(
+                "service",
+                "service__category",
+            )
+            .order_by(
+                "display_order",
+                "pk",
+            )
+        )
+
         context["service_features"] = (
             service.features
             .filter(
@@ -168,5 +185,3 @@ class ServiceDetailView(DetailView):
             context["related_services"] = Service.objects.none()
 
         return context
-
-

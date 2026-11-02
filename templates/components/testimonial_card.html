@@ -1,4 +1,4 @@
-<section class="section section-light">
+<section class="section section-light testimonial-section">
 
     <div class="container">
 
@@ -8,110 +8,98 @@
                 Testimonials
             </span>
 
-            <h2>
-                {{ testimonial_section.title }}
-            </h2>
-
-            <p>
-                {{ testimonial_section.subtitle }}
-            </p>
-
-        </div>
-
-
-        <div class="rating-summary">
-
-            <div class="rating-value">
-
-                4.9★
-
-            </div>
-
-            <div class="rating-text">
-
-                Average customer rating
-
-            </div>
+            {% if testimonial_section %}
+                <h2>{{ testimonial_section.title }}</h2>
+                <p>{{ testimonial_section.subtitle }}</p>
+            {% else %}
+                <h2>What Our Customers Say</h2>
+                <p>Hear from customers who trust Cleanex with their cleaning needs.</p>
+            {% endif %}
 
         </div>
-    </div>
 
-    <div class="row g-4">
-
-            {% for testimonial in testimonials %}
-
-            <div class="col-md-6 col-lg-4">
-
-                <div class="testimonial-card">
-
-                    <div class="testimonial-rating">
-
-                        {% for _ in "12345" %}
-
-                            <i class="bi bi-star-fill"></i>
-
-                        {% endfor %}
-
-                    </div>
-
-                    {% if testimonial.service_name %}
-
-                    <div class="service-badge">
-
-                        {{ testimonial.service_name }}
-
-                    </div>
-
-                    {% endif %}
-
-                    <p class="testimonial-review">
-
-                        "{{ testimonial.comment }}"
-
-                    </p>
-
-                    <div class="testimonial-footer">
-
-                        <div class="testimonial-avatar">
-
-                            {% if testimonial.customer_image %}
-
-                            <img
-                            src="{{ testimonial.customer_image.url }}"
-                            alt="{{ testimonial.full_name }}">
-
-                            {% else %}
-
-                            {{ testimonial.customer_name|slice:":1" }}
-
-                            {% endif %}
-
-                        </div>
-
-                        <div>
-
-                            <h6>
-
-                                {{ testimonial.full_name }}
-
-                            </h6>
-
-                            <span>
-
-                                {{ testimonial.city }}
-
-                            </span>
-
-                        </div>
-
-                    </div>
-
+        {% if testimonials %}
+            <div class="rating-summary">
+                <div class="rating-value">
+                   {{ testimonial_average|default_if_none:"0.0"|floatformat:1 }}★
                 </div>
 
+                <div class="rating-text">
+                    Average customer rating
+                </div>
             </div>
+        {% endif %}
 
-            {% endfor %}
+    </div>
 
+    {% if testimonials %}
+        <div class="container">
+            <div class="row g-4">
+
+                {% for testimonial in testimonials %}
+                    <div class="col-md-6 col-lg-4">
+
+                        <div class="testimonial-card">
+
+                            <div class="testimonial-rating"
+                                 aria-label="{{ testimonial.rating }} out of 5 stars">
+
+                                {% for star in "12345" %}
+                                    {% if forloop.counter <= testimonial.rating %}
+                                        <i class="bi bi-star-fill" aria-hidden="true"></i>
+                                    {% else %}
+                                        <i class="bi bi-star" aria-hidden="true"></i>
+                                    {% endif %}
+                                {% endfor %}
+
+                            </div>
+
+                            {% if testimonial.service_name %}
+                                <div class="service-badge">
+                                    {{ testimonial.service_name }}
+                                </div>
+                            {% endif %}
+
+                            <p class="testimonial-review">
+                                "{{ testimonial.review }}"
+                            </p>
+
+                            <div class="testimonial-footer">
+
+                                <div class="testimonial-avatar">
+
+                                    {% if testimonial.customer_image %}
+                                        <img
+                                            src="{{ testimonial.customer_image.url }}"
+                                            alt="{{ testimonial.customer_name }}"
+                                            loading="lazy">
+                                    {% else %}
+                                        {{ testimonial.customer_name|slice:":1"|upper }}
+                                    {% endif %}
+
+                                </div>
+
+                                <div>
+                                    <h6>{{ testimonial.customer_name }}</h6>
+
+                                    {% if testimonial.customer_location %}
+                                        <span>{{ testimonial.customer_location }}</span>
+                                    {% endif %}
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+                {% endfor %}
+
+            </div>
         </div>
+    {% else %}
+        <div class="container">
+            <p class="text-center">No testimonials yet.</p>
+        </div>
+    {% endif %}
 
 </section>

@@ -1,3 +1,4 @@
+from django.db.models import Avg
 from apps_core.website.models import ProcessStep
 from apps_core.core.models import (
     WhyChooseSection,
@@ -47,6 +48,8 @@ def website_content(request):
             is_active=True
         ),
 
+
+
         # =====================================================
         # TESTIMONIALS
         # =====================================================
@@ -59,6 +62,17 @@ def website_content(request):
             is_active=True,
             featured=True,
         ),
+
+        "testimonial_average": Testimonial.objects.filter(
+            is_active=True,
+            featured=True,
+        ).aggregate(
+            average=Avg("rating")
+        )["average"],
+
+
+
+
 
         # =====================================================
         # FAQ
