@@ -1,6 +1,6 @@
 .site-footer {
-    padding: clamp(3.5rem, 7vw, 5rem) 0 1.25rem;
-    border-top: 1px solid rgba(220, 235, 231, 0.28);
+    padding: clamp(3.25rem, 6vw, 4.75rem) 0 1rem;
+    border-top: 1px solid rgba(184, 227, 107, 0.42);
     background: var(--color-brand);
     color: var(--color-surface);
 }
@@ -15,8 +15,20 @@
 
 .footer-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 0.9fr);
-    gap: clamp(2rem, 5vw, 4.5rem);
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1fr);
+    gap: clamp(2rem, 4vw, 4rem);
+    padding-bottom: 2rem;
+}
+
+.footer-brand-link {
+    display: inline-block;
+    border-radius: 2px;
+    text-decoration: none;
+}
+
+.footer-brand-link:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 5px;
 }
 
 .footer-brand-name {
@@ -55,28 +67,46 @@
 }
 
 .footer-link,
-.footer-contact-item {
+.footer-contact-link {
+    display: inline-block;
     color: rgba(220, 235, 231, 0.82);
     line-height: 1.6;
     text-decoration: none;
-    transition: color var(--transition-base);
+    text-underline-offset: 0.2em;
+    transition: color var(--transition-fast);
 }
 
-.footer-link:hover {
+.footer-link:hover,
+.footer-contact-link:hover {
     color: var(--color-accent);
+    text-decoration: underline;
 }
 
-.footer-link:focus-visible {
+.footer-link:focus-visible,
+.footer-contact-link:focus-visible {
     border-radius: 2px;
     outline: 2px solid var(--color-accent);
     outline-offset: 4px;
     color: var(--color-accent);
 }
 
+.footer-bottom {
+    padding-top: 1.1rem;
+    border-top: 1px solid rgba(220, 235, 231, 0.22);
+}
+
+.footer-copyright {
+    margin: 0;
+    color: rgba(220, 235, 231, 0.72);
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
 @media (max-width: 767.98px) {
     .footer-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 2rem 1.5rem;
+        padding-bottom: 1.5rem;
     }
 
     .footer-brand {
@@ -96,7 +126,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .footer-link {
+    .footer-link,
+    .footer-contact-link {
         transition: none;
     }
 }

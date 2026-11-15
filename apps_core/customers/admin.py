@@ -9,6 +9,7 @@ class CustomerAdmin(admin.ModelAdmin):
         "full_name",
         "email",
         "phone",
+        "county",
         "city",
         "is_repeat_customer",
         "created_at",
@@ -24,6 +25,7 @@ class CustomerAdmin(admin.ModelAdmin):
         "full_name",
         "email",
         "phone",
+        "county",
         "city",
     )
 
@@ -51,6 +53,7 @@ class CustomerAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "address",
+                    "county",
                     "city",
                 )
             },

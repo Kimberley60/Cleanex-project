@@ -1,0 +1,22 @@
+{% extends "base/base.html" %}
+
+{% block title %}Request a Cleaning Quote | CLEANEX{% endblock %}
+
+{% block content %}
+<section class="quote-page">
+    <div class="container">
+        <header class="quote-header text-center mb-5">
+            <span class="quote-eyebrow">CLEANEX QUOTE REQUEST</span>
+            <h1 class="quote-title">Tell Us About Your Cleaning Needs</h1>
+            <p class="quote-subtitle">
+                Share a few details about your property. Our team will review
+                your request and follow up with a quotation.
+            </p>
+        </header>
+
+        <div class="quote-card">
+            {% include "components/quote_form.html" %}
+        </div>
+    </div>
+</section>
+{% endblock %}

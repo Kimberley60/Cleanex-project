@@ -7,6 +7,7 @@ from .models import (
     Testimonial,
     FAQCategory,
     FAQ,
+    ContactEnquiry,
 )
 
 
@@ -238,3 +239,40 @@ class FAQAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+
+@admin.register(ContactEnquiry)
+class ContactEnquiryAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "name",
+        "email",
+        "created_at",
+    )
+
+    search_fields = (
+        "name",
+        "email",
+    )
+
+    date_hierarchy = "created_at"
+
+    ordering = (
+        "-created_at",
+    )
+
+    readonly_fields = (
+        "name",
+        "email",
+        "message",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

@@ -1,3 +1,5 @@
+import logging
+
 from django.db import transaction
 from django.shortcuts import render, redirect
 from django.urls import reverse
@@ -7,6 +9,11 @@ from .models import Booking
 from django.core.cache import cache
 from .services import create_booking
 from ..customers.services import get_or_create_customer, update_repeat_customer_status
+from ..payments.models import Payment
+from ..core.rate_limit import BOOKING_RATE_LIMITS, rate_limited
+
+
+logger = logging.getLogger(__name__)
 
 
 # BookingCreateView
@@ -54,6 +61,7 @@ class BookingCreateView(View):
             },
         )
 
+    @rate_limited(*BOOKING_RATE_LIMITS)
     def post(self, request):
         selected_service = self.get_selected_service(request)
 
@@ -76,13 +84,21 @@ class BookingCreateView(View):
 
         try:
             with transaction.atomic():
-                customer, created = get_or_create_customer(
-                    full_name=cleaned_data["full_name"],
-                    email=cleaned_data["email"],
-                    phone=cleaned_data["phone"],
-                    address=cleaned_data["address"],
-                    city=cleaned_data["city"],
+                created_by = (
+                    request.user
+                    if request.user.is_authenticated
+                    else None
                 )
+                if created_by is None:
+                    customer, _created = get_or_create_customer(
+                        full_name=cleaned_data["full_name"],
+                        email=cleaned_data["email"],
+                        phone=cleaned_data["phone"],
+                        address=cleaned_data["address"],
+                        city=cleaned_data["city"],
+                    )
+                else:
+                    customer = None
 
                 booking_data = {
                     "service": cleaned_data["service"],
@@ -102,8 +118,10 @@ class BookingCreateView(View):
                 booking = create_booking(
                     customer,
                     booking_data,
+                    created_by=created_by,
                 )
 
+                customer = booking.customer
                 update_repeat_customer_status(customer)
 
         except ValueError as error:
@@ -206,12 +224,20 @@ class BookingSuccessView(View):
                 status=404,
             )
 
+        latest_payment = (
+            Payment.objects
+            .filter(booking=booking)
+            .order_by("-created_at", "-pk")
+            .first()
+        )
+
         return render(
             request,
             "pages/booking_success.html",
             {
                 "booking": booking,
                 "booking_id": booking_id,
+                "latest_payment": latest_payment,
             },
         )
 
@@ -241,8 +267,31 @@ class BookingTrackView(View):
         "completed": "Completed",
     }
 
-    MAX_TRACK_ATTEMPTS = 5
+    MAX_TRACK_ATTEMPTS_PER_REFERENCE = 5
+    MAX_TRACK_ATTEMPTS_PER_IP = 30
     TRACK_ATTEMPT_TIMEOUT = 600
+    COUNTER_RECOVERY_ATTEMPTS = 3
+
+    def _increment_attempt_counter(self, cache_key):
+        for _ in range(self.COUNTER_RECOVERY_ATTEMPTS):
+            try:
+                if cache.add(cache_key, 1, self.TRACK_ATTEMPT_TIMEOUT):
+                    return 1
+
+                return cache.incr(cache_key)
+            except ValueError:
+                continue
+            except Exception:
+                logger.exception(
+                    "Booking tracking rate-limit cache failed."
+                )
+                return None
+
+        logger.warning(
+            "Booking tracking rate-limit counter expired "
+            "during recovery."
+        )
+        return None
 
     def get(self, request):
         form = BookingTrackingForm()
@@ -284,19 +333,24 @@ class BookingTrackView(View):
             "unknown",
         )
 
-        cache_key = (
-            f"booking-track:"
-            f"{ip_address}:"
-            f"{reference}:"
-            f"{email}"
+        reference_attempts = self._increment_attempt_counter(
+            f"booking-track:ip-reference:{ip_address}:{reference}"
+        )
+        ip_attempts = self._increment_attempt_counter(
+            f"booking-track:ip:{ip_address}"
         )
 
-        attempt_count = cache.get(
-            cache_key,
-            0,
+        reference_limit_exceeded = (
+            reference_attempts is not None
+            and reference_attempts
+            > self.MAX_TRACK_ATTEMPTS_PER_REFERENCE
+        )
+        ip_limit_exceeded = (
+            ip_attempts is not None
+            and ip_attempts > self.MAX_TRACK_ATTEMPTS_PER_IP
         )
 
-        if attempt_count >= self.MAX_TRACK_ATTEMPTS:
+        if reference_limit_exceeded or ip_limit_exceeded:
             form.add_error(
                 None,
                 "Too many tracking attempts. "
@@ -313,12 +367,6 @@ class BookingTrackView(View):
                 },
                 status=429,
             )
-
-        cache.set(
-            cache_key,
-            attempt_count + 1,
-            self.TRACK_ATTEMPT_TIMEOUT,
-        )
 
         booking_id = int(reference[4:])
 
@@ -408,4 +456,3 @@ class BookingTrackView(View):
                 "timeline": timeline,
             },
         )
-

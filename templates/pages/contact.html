@@ -1,0 +1,57 @@
+{% extends "base/base.html" %}
+
+{% block title %}Contact CLEANEX{% endblock %}
+
+{% block content %}
+<section class="contact-page">
+    <div class="contact-layout">
+        <header class="contact-intro">
+            <p class="contact-eyebrow">WE'RE HERE TO HELP</p>
+            <h1>Contact CLEANEX</h1>
+            <p>
+                Have a question about our cleaning services? Send us a message
+                and our team will get back to you.
+            </p>
+        </header>
+
+        <div class="contact-card">
+            {% if messages %}
+                {% for message in messages %}
+                    {% if message.tags == "success" %}
+                        <div class="contact-notice contact-notice-success" role="status">
+                            {{ message }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+
+            <form method="post" action="{% url 'contact' %}" class="contact-form">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="contact-notice contact-notice-error" role="alert">
+                        {% for error in form.non_field_errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% for field in form %}
+                    <div class="contact-field">
+                        <label for="{{ field.id_for_label }}">
+                            {{ field.label }} <span aria-hidden="true">*</span>
+                            <span class="visually-hidden">required</span>
+                        </label>
+                        {{ field }}
+                        {% for error in field.errors %}
+                            <p class="contact-field-error" role="alert">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+
+                <p class="contact-required-note">All fields are required.</p>
+                <button type="submit" class="contact-submit">Send message</button>
+            </form>
+        </div>
+    </div>
+</section>
+{% endblock %}

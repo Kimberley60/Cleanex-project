@@ -1,13 +1,67 @@
+from django import forms
 from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 from .models import Booking, BookingExtra
 from .services import change_booking_status
 
 
+class BookingExtraAdminForm(forms.ModelForm):
+    class Meta:
+        model = BookingExtra
+        fields = ("booking", "extra_service")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.instance.pk:
+            original_relationships = (
+                BookingExtra.objects
+                .filter(pk=self.instance.pk)
+                .values_list("booking_id", "extra_service_id")
+                .first()
+            )
+            if original_relationships is None:
+                raise ValidationError(
+                    "This historical extra association no longer exists."
+                )
+
+            original_booking_id, original_extra_service_id = (
+                original_relationships
+            )
+            if (
+                "booking" in cleaned_data
+                and cleaned_data["booking"].pk != original_booking_id
+            ):
+                self.add_error(
+                    "booking",
+                    "An existing booking extra cannot be moved.",
+                )
+            if (
+                "extra_service" in cleaned_data
+                and cleaned_data["extra_service"].pk
+                != original_extra_service_id
+            ):
+                self.add_error(
+                    "extra_service",
+                    "An existing booking extra cannot be reassigned.",
+                )
+
+        return cleaned_data
+
 
 class BookingExtraInline(admin.TabularInline):
     model = BookingExtra
+    form = BookingExtraAdminForm
     extra = 1
+    can_delete = False
     autocomplete_fields = ("extra_service",)
+    readonly_fields = (
+        "extra_service_name",
+        "extra_service_price",
+    )
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 
 @admin.register(Booking)
@@ -61,6 +115,10 @@ class BookingAdmin(admin.ModelAdmin):
 
     readonly_fields = (
         "status",
+        "service",
+        "staff",
+        "booking_date",
+        "booking_time",
         "created_at",
         "updated_at",
     )
@@ -154,6 +212,12 @@ class BookingAdmin(admin.ModelAdmin):
         BookingExtraInline,
     ]
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request):
+        return False
+
     @admin.action(description="Confirm selected bookings")
     def confirm_bookings(self, request, queryset):
         self._change_status(
@@ -229,10 +293,13 @@ class BookingAdmin(admin.ModelAdmin):
 
 @admin.register(BookingExtra)
 class BookingExtraAdmin(admin.ModelAdmin):
+    form = BookingExtraAdminForm
 
     list_display = (
         "booking",
         "extra_service",
+        "extra_service_name",
+        "extra_service_price",
     )
 
     list_filter = (
@@ -249,3 +316,11 @@ class BookingExtraAdmin(admin.ModelAdmin):
         "booking",
         "extra_service",
     )
+
+    readonly_fields = (
+        "extra_service_name",
+        "extra_service_price",
+    )
+
+    def has_delete_permission(self, request, obj=None):
+        return False

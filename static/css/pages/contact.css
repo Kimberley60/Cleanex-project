@@ -1,0 +1,166 @@
+.contact-page {
+    min-height: 65vh;
+    padding: clamp(6.5rem, 11vw, 9rem) 1rem 5rem;
+    color: var(--color-text);
+    background: var(--color-surface);
+}
+
+.contact-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+    gap: clamp(2rem, 7vw, 5.5rem);
+    width: min(100%, 1080px);
+    align-items: start;
+    margin: 0 auto;
+}
+
+.contact-intro {
+    padding-top: 1.25rem;
+}
+
+.contact-eyebrow {
+    margin-bottom: 0.75rem;
+    color: var(--color-brand);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+}
+
+.contact-intro h1 {
+    margin-bottom: 1rem;
+    color: var(--color-brand);
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    line-height: 1.1;
+}
+
+.contact-intro > p:last-child {
+    max-width: 42ch;
+    color: var(--color-text-muted);
+    font-size: 1.05rem;
+    line-height: 1.7;
+}
+
+.contact-card {
+    padding: clamp(1.35rem, 4vw, 2.25rem);
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-card);
+}
+
+.contact-form {
+    display: grid;
+    gap: 1.2rem;
+}
+
+.contact-field label {
+    display: block;
+    margin-bottom: 0.45rem;
+    color: var(--color-text);
+    font-weight: 700;
+}
+
+.contact-field label span[aria-hidden="true"] {
+    color: var(--color-brand);
+}
+
+.contact-input {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    padding: 0.7rem 0.85rem;
+    color: var(--color-text);
+    background: var(--color-white);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    font: inherit;
+}
+
+.contact-message {
+    min-height: 150px;
+    resize: vertical;
+}
+
+.contact-input:focus-visible {
+    border-color: var(--color-brand);
+    outline: 3px solid var(--color-surface-sage);
+    outline-offset: 2px;
+}
+
+.contact-field-error {
+    margin: 0.4rem 0 0;
+    color: #a12622;
+    font-size: 0.9rem;
+}
+
+.contact-required-note {
+    margin: -0.5rem 0 0;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
+
+.contact-submit {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    justify-self: start;
+    padding: 0.7rem 1.25rem;
+    color: var(--color-on-accent);
+    background: var(--color-accent);
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    font-weight: 750;
+    cursor: pointer;
+    transition: filter var(--transition-fast);
+}
+
+.contact-submit:hover {
+    filter: brightness(0.96);
+}
+
+.contact-submit:focus-visible {
+    outline: 3px solid var(--color-brand);
+    outline-offset: 3px;
+}
+
+.contact-notice {
+    padding: 0.85rem 1rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+}
+
+.contact-notice p {
+    margin: 0;
+}
+
+.contact-notice-success {
+    background: var(--color-surface-sage);
+    color: var(--color-brand);
+}
+
+.contact-notice-error {
+    background: var(--color-surface-sand);
+    color: var(--color-text);
+}
+
+@media (max-width: 760px) {
+    .contact-page {
+        padding-top: 6.5rem;
+    }
+
+    .contact-layout {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+
+    .contact-intro {
+        padding-top: 0;
+    }
+
+    .contact-submit {
+        width: 100%;
+    }
+}

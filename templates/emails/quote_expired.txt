@@ -1,0 +1,11 @@
+Hello,
+
+Your CLEANEX quotation has expired.
+
+Quotation reference: Q-{{ quote_reference }}
+Service: {{ service_name }}
+
+Please sign in to your CLEANEX account and visit My Quotations to view your quotation history.
+
+Thank you,
+CLEANEX

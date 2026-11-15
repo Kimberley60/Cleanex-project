@@ -1,0 +1,13 @@
+Hello,
+
+Your CLEANEX quotation is ready for review.
+
+Quotation reference: Q-{{ quote_reference }}
+Service: {{ service_name }}
+Proposed amount: KES {{ proposed_amount|floatformat:2 }}
+Valid until: {{ quote_valid_until|date:"F j, Y" }}
+
+Please sign in to your CLEANEX account and visit My Quotations to review and respond to your quotation.
+
+Thank you,
+CLEANEX

@@ -1,0 +1,43 @@
+{% extends "base/base.html" %}
+
+{% block title %}Verify Email | CLEANEX{% endblock %}
+
+{% block content %}
+<section class="account-page">
+    <div class="account-card account-message-card">
+        {% if already_verified %}
+            <p class="account-eyebrow">ACCOUNT ACTIVE</p>
+            <h1>Email already verified</h1>
+            <p class="account-intro">Your account is ready to use.</p>
+            <a class="account-submit account-button-link" href="{% url 'login' %}">
+                Sign in
+            </a>
+        {% elif not valid_link %}
+            <p class="account-eyebrow">VERIFICATION LINK</p>
+            <h1>Link unavailable</h1>
+            <p class="account-intro">
+                {{ verification_error|default:"This verification link is invalid or has expired." }}
+            </p>
+            <a href="{% url 'customer_resend_verification' %}">
+                Request another verification link
+            </a>
+        {% elif verification_error %}
+            <p class="account-eyebrow">ACCOUNT REVIEW</p>
+            <h1>We need to review this account</h1>
+            <p class="account-intro">{{ verification_error }}</p>
+        {% else %}
+            <p class="account-eyebrow">EMAIL VERIFICATION</p>
+            <h1>Verify your email</h1>
+            <p class="account-intro">
+                Confirm your email address to activate your CLEANEX account.
+            </p>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="account-submit">
+                    Verify email address
+                </button>
+            </form>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

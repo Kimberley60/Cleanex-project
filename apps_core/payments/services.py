@@ -1,9 +1,16 @@
 from decimal import Decimal
+from datetime import datetime, timedelta, timezone as datetime_timezone
+from email.utils import parsedate_to_datetime
 import logging
-from django.db import transaction
+import random
+import re
+import requests
+import uuid
+from django.db import IntegrityError, transaction
+from django.db.models import F, Q
 from django.utils import timezone
 from apps_core.bookings.models import Booking
-from apps_core.payments.models import Payment
+from apps_core.payments.models import MpesaCallbackMetadata, Payment
 
 
 logger = logging.getLogger(__name__)
@@ -15,8 +22,8 @@ logger = logging.getLogger(__name__)
 #                                      \----> "failed"
 #                                      \----> "unknown"
 #
-# "unknown" can be resolved by a verified callback to "paid" or "failed".
-# "paid" and "failed" are terminal states.
+# "unknown" can be resolved by independent verification to "paid" or
+# "failed". "paid" and "failed" are terminal states.
 #
 # pending -> processing is retained for compatibility with direct service
 # calls and existing tests. initiate_payment() always persists "initiating"
@@ -29,6 +36,148 @@ PAYMENT_STATUS_TRANSITIONS = {
     "paid": set(),
     "failed": set(),
 }
+
+# STK Push Query result codes that Safaricom reports as a completed,
+# non-successful attempt. These are safe to treat as failed so the customer
+# can start a new prompt. Inconclusive or still-processing codes are not
+# included and must remain uncertain.
+MPESA_TERMINAL_FAILURE_RESULT_CODES = {
+    "1019",  # Transaction expired.
+    "1032",  # Request cancelled by user.
+    "1037",  # Prompt timed out / handset unreachable.
+    "1",     # Insufficient M-Pesa balance.
+}
+
+
+VERIFICATION_LEASE_SECONDS = 120
+VERIFICATION_BASE_DELAY_SECONDS = 30
+VERIFICATION_MAX_DELAY_SECONDS = 3600
+VERIFICATION_BACKOFF_EXPONENT_CAP = 7
+VERIFICATION_JITTER_RATIO = 0.2
+VERIFICATION_ELIGIBLE_STATUSES = {"processing", "unknown", "paid"}
+
+
+def _retry_after_seconds(value):
+    """Return Retry-After seconds from a header value, if valid."""
+
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        seconds = int(value)
+        return max(seconds, 0) if seconds >= 0 else None
+
+    text = str(value).strip()
+
+    if not text:
+        return None
+
+    if text.isdigit():
+        return int(text)
+
+    try:
+        parsed = parsedate_to_datetime(text)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime_timezone.utc)
+
+    seconds = int((parsed - timezone.now()).total_seconds())
+    return max(seconds, 0)
+
+
+def _verification_delay_seconds(attempt_count, *, retry_after=None):
+    """Return a bounded verification delay with optional Retry-After."""
+
+    retry_seconds = _retry_after_seconds(retry_after)
+
+    if retry_seconds is not None:
+        return min(retry_seconds, VERIFICATION_MAX_DELAY_SECONDS)
+
+    exponent = max(
+        0,
+        min(int(attempt_count) - 1, VERIFICATION_BACKOFF_EXPONENT_CAP),
+    )
+    base_delay = VERIFICATION_BASE_DELAY_SECONDS * (2 ** exponent)
+    base_delay = min(base_delay, VERIFICATION_MAX_DELAY_SECONDS)
+    jitter = random.uniform(
+        0,
+        base_delay * VERIFICATION_JITTER_RATIO,
+    )
+
+    return min(base_delay + jitter, VERIFICATION_MAX_DELAY_SECONDS)
+
+
+def _next_verification_at(attempt_count, *, retry_after=None):
+    return timezone.now() + timedelta(
+        seconds=_verification_delay_seconds(
+            attempt_count,
+            retry_after=retry_after,
+        )
+    )
+
+
+def _claim_payment_verification(payment):
+    """
+    Atomically claim the right to run one STK Push Query for a payment.
+
+    Returns a lease ID when the claim succeeds, otherwise None. The lease
+    expires automatically so a crashed worker cannot block verification
+    forever.
+    """
+
+    now = timezone.now()
+    lease_id = uuid.uuid4()
+    lease_expires_at = now + timedelta(seconds=VERIFICATION_LEASE_SECONDS)
+
+    claimed = (
+        Payment.objects
+        .filter(
+            pk=payment.pk,
+            status__in=VERIFICATION_ELIGIBLE_STATUSES,
+        )
+        .filter(
+            Q(next_verification_at__isnull=True)
+            | Q(next_verification_at__lte=now)
+        )
+        .filter(
+            Q(verification_lease_expires_at__isnull=True)
+            | Q(verification_lease_expires_at__lte=now)
+        )
+        .update(
+            verification_attempt_count=F("verification_attempt_count") + 1,
+            last_verification_at=now,
+            verification_lease_id=lease_id,
+            verification_lease_expires_at=lease_expires_at,
+        )
+    )
+
+    if claimed != 1:
+        return None
+
+    return lease_id
+
+
+def _finish_payment_verification(
+    payment,
+    lease_id,
+    *,
+    next_verification_at,
+):
+    """Release a verification lease and schedule the next attempt."""
+
+    Payment.objects.filter(
+        pk=payment.pk,
+        verification_lease_id=lease_id,
+    ).update(
+        verification_lease_id=None,
+        verification_lease_expires_at=None,
+        next_verification_at=next_verification_at,
+    )
 
 
 @transaction.atomic
@@ -96,8 +245,8 @@ def mark_payment_processing(
     """
     Mark a payment as processing after Daraja accepts the STK Push.
 
-    The checkout request ID is stored so the callback can be matched to
-    this payment attempt.
+    The checkout request ID is stored so a later independent query can
+    verify this payment attempt.
     """
 
     _validate_payment(payment)
@@ -134,7 +283,7 @@ def mark_payment_processing(
 def mark_payment_paid(
     payment,
     *,
-    mpesa_receipt,
+    mpesa_receipt=None,
     transaction_date=None,
     result_code="0",
     result_description="Payment completed successfully.",
@@ -142,14 +291,13 @@ def mark_payment_paid(
     """
     Mark a payment as successfully paid.
 
-    A valid M-Pesa receipt is required before the payment can be marked
-    as paid. Payments already paid or failed cannot be changed again.
+    The payment must have been independently verified before this function
+    is called. A receipt and transaction date are optional because STK Push
+    Query does not return them. Payments already paid or failed cannot be
+    changed again.
     """
 
     _validate_payment(payment)
-
-    if not mpesa_receipt:
-        raise ValueError("M-Pesa receipt is required.")
 
     payment = Payment.objects.select_for_update().get(pk=payment.pk)
 
@@ -159,12 +307,14 @@ def mark_payment_paid(
     )
 
     payment.status = "paid"
-    payment.mpesa_receipt = str(mpesa_receipt)
+    payment.mpesa_receipt = (
+        str(mpesa_receipt) if mpesa_receipt else None
+    )
     payment.result_code = str(result_code)
     payment.result_description = (
         result_description or "Payment completed successfully."
     )
-    payment.transaction_date = transaction_date or timezone.now()
+    payment.transaction_date = transaction_date
 
     payment.save(
         update_fields=[
@@ -316,6 +466,198 @@ def _validate_status_transition(current_status, new_status):
         )
 
 
+def _callback_metadata_map(stk_callback):
+    """
+    Return a safe name/value mapping from M-Pesa callback metadata.
+
+    Malformed metadata is ignored so payment verification can continue.
+    """
+
+    metadata = stk_callback.get("CallbackMetadata")
+
+    if not isinstance(metadata, dict):
+        return {}
+
+    items = metadata.get("Item")
+
+    if not isinstance(items, list):
+        return {}
+
+    values = {}
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        name = item.get("Name")
+
+        if not isinstance(name, str) or not name:
+            continue
+
+        values[name] = item.get("Value")
+
+    return values
+
+
+def _normalize_mpesa_receipt(value):
+    """
+    Normalize an M-Pesa receipt number without truncating it.
+    """
+
+    if value is None:
+        return None
+
+    receipt = str(value).strip()
+    max_length = Payment._meta.get_field("mpesa_receipt").max_length
+
+    if not receipt or len(receipt) > max_length:
+        return None
+
+    return receipt
+
+
+def _parse_mpesa_transaction_date(value):
+    """
+    Parse an M-Pesa transaction date into an aware datetime.
+
+    Invalid or missing values return None. The callback arrival time is
+    never substituted for the provider transaction date.
+    """
+
+    if value is None:
+        return None
+
+    text = str(value).strip()
+
+    if not text:
+        return None
+
+    try:
+        parsed = datetime.strptime(text, "%Y%m%d%H%M%S")
+    except (TypeError, ValueError):
+        return None
+
+    return timezone.make_aware(
+        parsed,
+        timezone.get_current_timezone(),
+    )
+
+
+def _available_mpesa_receipt(payment, receipt):
+    """
+    Return the receipt only when it is not already assigned elsewhere.
+    """
+
+    if not receipt:
+        return None
+
+    conflict = (
+        Payment.objects
+        .select_for_update()
+        .filter(mpesa_receipt=receipt)
+        .exclude(pk=payment.pk)
+        .exists()
+    )
+
+    if conflict:
+        logger.warning(
+            "Ignoring duplicate M-Pesa receipt for payment %s.",
+            payment.pk,
+        )
+        return None
+
+    return receipt
+
+
+def _log_mpesa_provider_error(operation_context, payment_pk, exc):
+    """
+    Log safe M-Pesa provider HTTP diagnostics without secrets or bodies.
+    """
+
+    status_code = getattr(exc, "status_code", None)
+
+    if status_code is None:
+        return False
+
+    provider_operation = getattr(exc, "operation", None) or operation_context
+    retry_after = getattr(exc, "retry_after", None)
+    request_id = getattr(exc, "request_id", None)
+    error_code = getattr(exc, "error_code", None)
+    error_message = getattr(exc, "error_message", None)
+
+    if status_code == 403:
+        logger.warning(
+            "M-Pesa %s forbidden (HTTP 403) while verifying payment %s; "
+            "retry_after=%s request_id=%s error_code=%s error_message=%s",
+            provider_operation,
+            payment_pk,
+            retry_after,
+            request_id,
+            error_code,
+            error_message,
+        )
+    elif status_code == 429:
+        logger.warning(
+            "M-Pesa %s rate limited (HTTP 429) while verifying payment %s; "
+            "retry_after=%s request_id=%s error_code=%s error_message=%s",
+            provider_operation,
+            payment_pk,
+            retry_after,
+            request_id,
+            error_code,
+            error_message,
+        )
+    else:
+        logger.warning(
+            "M-Pesa %s request failed (HTTP %s) while verifying payment %s; "
+            "retry_after=%s request_id=%s error_code=%s error_message=%s",
+            provider_operation,
+            status_code,
+            payment_pk,
+            retry_after,
+            request_id,
+            error_code,
+            error_message,
+        )
+
+    return True
+
+
+def _sanitize_log_text(value, *, max_length, fallback):
+    """
+    Return safe single-line log text for provider result fields.
+    """
+
+    if not isinstance(value, str):
+        return fallback
+
+    sanitized = re.sub(r"[\r\n]+", " ", value).strip()
+
+    if not sanitized:
+        return fallback
+
+    return sanitized[:max_length]
+
+
+def _safe_query_result_code(value):
+    if isinstance(value, int) and not isinstance(value, bool):
+        value = str(value)
+
+    return _sanitize_log_text(
+        value,
+        max_length=50,
+        fallback="missing",
+    )
+
+
+def _safe_query_result_description(value):
+    return _sanitize_log_text(
+        value,
+        max_length=200,
+        fallback="unavailable",
+    )
+
+
 def initiate_payment(payment):
     if not isinstance(payment, Payment) or payment.pk is None:
         raise ValueError(
@@ -367,7 +709,10 @@ def initiate_payment(payment):
     # Keep the caller's instance consistent with the database.
     payment.refresh_from_db()
 
-    from .integrations.mpesa import MpesaIntegration
+    from .integrations.mpesa import (
+        MpesaIntegration,
+        MpesaLocalValidationError,
+    )
 
     try:
         mpesa = MpesaIntegration()
@@ -381,6 +726,31 @@ def initiate_payment(payment):
                 f"{payment.booking.booking_reference}"
             ),
         )
+
+    except MpesaLocalValidationError as exc:
+        logger.warning(
+            "Local M-Pesa validation rejected payment %s before "
+            "submission: %s",
+            payment.pk,
+            exc,
+        )
+
+        try:
+            mark_payment_failed(
+                payment,
+                result_description=(
+                    "The payment request could not be submitted to "
+                    "M-Pesa. Please contact CLEANEX support."
+                ),
+            )
+        except Exception:
+            logger.exception(
+                "Could not mark payment %s as failed after a local "
+                "M-Pesa validation error.",
+                payment.pk,
+            )
+
+        raise
 
     except Exception:
         # A timeout or connection failure does not prove that Safaricom
@@ -481,15 +851,830 @@ def initiate_payment(payment):
     return payment
 
 
+def verify_payment(payment, *, mpesa_receipt=None, transaction_date=None):
+    """
+    Independently verify a payment using its saved STK checkout ID.
+
+    Provider requests happen outside database transactions. A short locked
+    update rechecks payment state and identifiers before applying results.
+    """
+
+    _validate_payment(payment)
+    payment = Payment.objects.get(pk=payment.pk)
+    payment._verification_attempted = False
+
+    if payment.status in {"paid", "failed"}:
+        return payment
+
+    if payment.status not in {"processing", "unknown"}:
+        return payment
+
+    checkout_request_id = payment.checkout_request_id
+
+    if not checkout_request_id:
+        logger.warning(
+            "Cannot verify payment %s without a checkout request ID.",
+            payment.pk,
+        )
+        return payment
+
+    saved_status = payment.status
+    saved_merchant_request_id = payment.merchant_request_id
+
+    lease_id = _claim_payment_verification(payment)
+
+    if lease_id is None:
+        return payment
+
+    payment.refresh_from_db()
+    payment._verification_attempted = True
+    attempt_count = payment.verification_attempt_count
+    next_verification_at = _next_verification_at(attempt_count)
+
+    from .integrations.mpesa import MpesaIntegration
+
+    try:
+        try:
+            response = MpesaIntegration().query_stk_push(
+                checkout_request_id
+            )
+        except requests.RequestException as exc:
+            next_verification_at = _next_verification_at(
+                attempt_count,
+                retry_after=getattr(exc, "retry_after", None),
+            )
+            if not _log_mpesa_provider_error("stk_query", payment.pk, exc):
+                logger.warning(
+                    "Could not verify payment %s with M-Pesa STK Push Query.",
+                    payment.pk,
+                    exc_info=True,
+                )
+            return payment
+
+        except ValueError:
+            next_verification_at = _next_verification_at(attempt_count)
+            logger.warning(
+                "Could not verify payment %s with M-Pesa STK Push Query.",
+                payment.pk,
+                exc_info=True,
+            )
+            return payment
+
+        if not isinstance(response, dict):
+            logger.warning(
+                "M-Pesa STK Push Query returned an invalid response "
+                "for payment %s.",
+                payment.pk,
+            )
+            return payment
+
+        response_code = response.get("ResponseCode")
+        response_checkout_id = response.get("CheckoutRequestID")
+        response_merchant_id = response.get("MerchantRequestID")
+        result_code = response.get("ResultCode")
+
+        if str(response_code) != "0":
+            logger.warning(
+                "M-Pesa STK Push Query did not confirm request acceptance "
+                "for payment %s.",
+                payment.pk,
+            )
+            return payment
+
+        if response_checkout_id != checkout_request_id:
+            logger.warning(
+                "M-Pesa STK Push Query checkout ID did not match payment %s.",
+                payment.pk,
+            )
+            return payment
+
+        if (
+            response_merchant_id is not None
+            and saved_merchant_request_id
+            and response_merchant_id != saved_merchant_request_id
+        ):
+            logger.warning(
+                "M-Pesa STK Push Query merchant ID did not match payment %s.",
+                payment.pk,
+            )
+            return payment
+
+        result_code_text = (
+            str(result_code) if result_code is not None else ""
+        )
+
+        if result_code_text == "0":
+            confirmed_success = True
+
+        elif result_code_text in MPESA_TERMINAL_FAILURE_RESULT_CODES:
+            confirmed_success = False
+
+        else:
+            logger.info(
+                "M-Pesa STK Push Query result for payment %s is "
+                "inconclusive; payment_status=%s result_code=%s "
+                "result_description=%s",
+                payment.pk,
+                saved_status,
+                _safe_query_result_code(result_code),
+                _safe_query_result_description(response.get("ResultDesc")),
+            )
+            return payment
+
+        with transaction.atomic():
+            locked_payment = (
+                Payment.objects
+                .select_for_update()
+                .get(pk=payment.pk)
+            )
+
+            if locked_payment.status != saved_status:
+                if locked_payment.status in {"paid", "failed"}:
+                    next_verification_at = None
+                return locked_payment
+
+            if (
+                locked_payment.checkout_request_id != checkout_request_id
+                or locked_payment.merchant_request_id
+                != saved_merchant_request_id
+            ):
+                if locked_payment.status in {"paid", "failed"}:
+                    next_verification_at = None
+                return locked_payment
+
+            if locked_payment.status not in {"processing", "unknown"}:
+                if locked_payment.status in {"paid", "failed"}:
+                    next_verification_at = None
+                return locked_payment
+
+            if confirmed_success:
+                next_verification_at = None
+                receipt = _available_mpesa_receipt(
+                    locked_payment,
+                    mpesa_receipt,
+                )
+                result_description = (
+                    response.get("ResultDesc")
+                    or "Payment independently confirmed by M-Pesa."
+                )
+
+                try:
+                    return mark_payment_paid(
+                        locked_payment,
+                        mpesa_receipt=receipt,
+                        transaction_date=transaction_date,
+                        result_code=result_code,
+                        result_description=result_description,
+                    )
+                except IntegrityError:
+                    logger.warning(
+                        "Ignoring duplicate M-Pesa receipt for payment %s.",
+                        locked_payment.pk,
+                    )
+                    return mark_payment_paid(
+                        locked_payment,
+                        mpesa_receipt=None,
+                        transaction_date=transaction_date,
+                        result_code=result_code,
+                        result_description=result_description,
+                    )
+
+            next_verification_at = None
+            return mark_payment_failed(
+                locked_payment,
+                result_code=result_code,
+                result_description=(
+                    response.get("ResultDesc")
+                    or "Payment was not completed."
+                ),
+            )
+    finally:
+        _finish_payment_verification(
+            payment,
+            lease_id,
+            next_verification_at=next_verification_at,
+        )
+
+
+def _stk_query_paid_success_result(payment):
+    """
+    Return ``(confirmed, error_code)`` for paid-success STK Push Query.
+
+    The confirmation rules are identical to the historical paid-metadata
+    verification helper: request acceptance, exact checkout ID, merchant ID
+    when returned, and ResultCode 0 are all required.
+    """
+
+    checkout_request_id = payment.checkout_request_id
+    saved_merchant_request_id = payment.merchant_request_id
+
+    if not checkout_request_id:
+        return False, "missing_checkout_id"
+
+    lease_id = _claim_payment_verification(payment)
+
+    if lease_id is None:
+        return False, "cooldown"
+
+    payment.refresh_from_db()
+    attempt_count = payment.verification_attempt_count
+    next_verification_at = _next_verification_at(attempt_count)
+
+    from .integrations.mpesa import MpesaIntegration
+
+    try:
+        try:
+            response = MpesaIntegration().query_stk_push(
+                checkout_request_id
+            )
+        except requests.RequestException as exc:
+            next_verification_at = _next_verification_at(
+                attempt_count,
+                retry_after=getattr(exc, "retry_after", None),
+            )
+            if not _log_mpesa_provider_error(
+                "stk_query",
+                payment.pk,
+                exc,
+            ):
+                logger.warning(
+                    "Could not independently verify paid payment %s "
+                    "before metadata enrichment.",
+                    payment.pk,
+                    exc_info=True,
+                )
+
+            status_code = getattr(exc, "status_code", None)
+            if status_code == 429:
+                return False, "http_429"
+            if status_code == 403:
+                return False, "http_403"
+            return False, "request_error"
+
+        except ValueError:
+            next_verification_at = _next_verification_at(attempt_count)
+            logger.warning(
+                "Could not independently verify paid payment %s "
+                "before metadata enrichment.",
+                payment.pk,
+                exc_info=True,
+            )
+            return False, "invalid_response"
+
+        if not isinstance(response, dict):
+            logger.warning(
+                "M-Pesa STK Push Query returned an invalid response "
+                "for paid payment %s metadata enrichment.",
+                payment.pk,
+            )
+            return False, "invalid_response"
+
+        if str(response.get("ResponseCode")) != "0":
+            logger.warning(
+                "M-Pesa STK Push Query did not confirm request acceptance "
+                "for paid payment %s metadata enrichment.",
+                payment.pk,
+            )
+            return False, "request_not_accepted"
+
+        if response.get("CheckoutRequestID") != checkout_request_id:
+            logger.warning(
+                "M-Pesa STK Push Query checkout ID did not match "
+                "paid payment %s metadata enrichment.",
+                payment.pk,
+            )
+            return False, "checkout_mismatch"
+
+        response_merchant_id = response.get("MerchantRequestID")
+
+        if (
+            response_merchant_id is not None
+            and saved_merchant_request_id
+            and response_merchant_id != saved_merchant_request_id
+        ):
+            logger.warning(
+                "M-Pesa STK Push Query merchant ID did not match "
+                "paid payment %s metadata enrichment.",
+                payment.pk,
+            )
+            return False, "merchant_mismatch"
+
+        result_code = response.get("ResultCode")
+
+        if result_code is None or str(result_code) != "0":
+            logger.info(
+                "M-Pesa STK Push Query did not confirm paid success for "
+                "payment %s metadata enrichment; result_code=%s "
+                "result_description=%s",
+                payment.pk,
+                _safe_query_result_code(result_code),
+                _safe_query_result_description(response.get("ResultDesc")),
+            )
+            return False, "result_not_success"
+
+        next_verification_at = None
+        return True, None
+    finally:
+        _finish_payment_verification(
+            payment,
+            lease_id,
+            next_verification_at=next_verification_at,
+        )
+
+
+def _stk_query_confirms_paid_success(payment):
+    """
+    Return True only when STK Push Query independently confirms the paid
+    result for this exact payment attempt.
+    """
+
+    return _stk_query_paid_success_result(payment)[0]
+
+
+def _enrich_paid_payment_metadata(
+    payment,
+    *,
+    mpesa_receipt,
+    transaction_date,
+    merchant_request_id,
+):
+    """
+    Fill missing M-Pesa metadata on an already-paid payment after a late
+    callback.
+
+    Callback data is never trusted by itself. The payment must already be
+    paid, the callback merchant identifier must match the saved payment, and
+    an independent STK Push Query must confirm ResultCode 0 before metadata
+    is saved. This helper never changes payment status or result fields.
+    """
+
+    _validate_payment(payment)
+    payment = Payment.objects.get(pk=payment.pk)
+
+    if payment.status != "paid":
+        return payment
+
+    saved_checkout_request_id = payment.checkout_request_id
+    saved_merchant_request_id = payment.merchant_request_id
+
+    if not saved_checkout_request_id or not saved_merchant_request_id:
+        return payment
+
+    if (
+        not isinstance(merchant_request_id, str)
+        or not merchant_request_id
+        or merchant_request_id != saved_merchant_request_id
+    ):
+        return payment
+
+    needs_receipt = (
+        not payment.mpesa_receipt
+        and mpesa_receipt is not None
+    )
+    needs_transaction_date = (
+        payment.transaction_date is None
+        and transaction_date is not None
+    )
+
+    if not (needs_receipt or needs_transaction_date):
+        return payment
+
+    if not _stk_query_confirms_paid_success(payment):
+        return payment
+
+    with transaction.atomic():
+        locked_payment = (
+            Payment.objects
+            .select_for_update()
+            .get(pk=payment.pk)
+        )
+
+        if locked_payment.status != "paid":
+            return locked_payment
+
+        if (
+            locked_payment.checkout_request_id
+            != saved_checkout_request_id
+            or locked_payment.merchant_request_id
+            != saved_merchant_request_id
+        ):
+            return locked_payment
+
+        metadata_fields = []
+        original_receipt = locked_payment.mpesa_receipt
+        attempted_receipt = False
+
+        if not locked_payment.mpesa_receipt and mpesa_receipt is not None:
+            receipt = _available_mpesa_receipt(
+                locked_payment,
+                mpesa_receipt,
+            )
+            if receipt is not None:
+                locked_payment.mpesa_receipt = receipt
+                metadata_fields.append("mpesa_receipt")
+                attempted_receipt = True
+
+        if (
+            locked_payment.transaction_date is None
+            and transaction_date is not None
+        ):
+            locked_payment.transaction_date = transaction_date
+            metadata_fields.append("transaction_date")
+
+        if not metadata_fields:
+            return locked_payment
+
+        try:
+            with transaction.atomic():
+                locked_payment.save(
+                    update_fields=metadata_fields + ["updated_at"]
+                )
+        except IntegrityError:
+            if not attempted_receipt:
+                raise
+
+            logger.warning(
+                "Ignoring duplicate M-Pesa receipt during paid "
+                "metadata enrichment for payment %s.",
+                locked_payment.pk,
+            )
+            locked_payment.mpesa_receipt = original_receipt
+
+            retry_fields = [
+                field
+                for field in metadata_fields
+                if field != "mpesa_receipt"
+            ]
+
+            if retry_fields:
+                with transaction.atomic():
+                    locked_payment.save(
+                        update_fields=retry_fields + ["updated_at"]
+                    )
+
+        return locked_payment
+
+
+def _callback_metadata_allowed(stk_callback, merchant_request_id, payment):
+    """
+    Return True only when callback metadata may be captured for this payment.
+
+    Callback ResultCode is required to be successful for metadata capture,
+    but it is never treated as proof that the payment succeeded.
+    """
+
+    return (
+        str(stk_callback.get("ResultCode")) == "0"
+        and isinstance(merchant_request_id, str)
+        and bool(merchant_request_id)
+        and merchant_request_id == payment.merchant_request_id
+    )
+
+
+def _store_callback_metadata(
+    payment,
+    *,
+    mpesa_receipt,
+    transaction_date,
+):
+    """
+    Persist validated callback metadata for an eligible payment.
+
+    Eligible payments are processing, unknown, or paid. At most one
+    candidate record exists per payment. Existing pending candidates are
+    updated only for fields that are still missing.
+    """
+
+    if payment.status not in {"processing", "unknown", "paid"}:
+        return None
+
+    if not payment.checkout_request_id or not payment.merchant_request_id:
+        return None
+
+    needs_receipt = (
+        not payment.mpesa_receipt
+        and mpesa_receipt is not None
+    )
+    needs_transaction_date = (
+        payment.transaction_date is None
+        and transaction_date is not None
+    )
+
+    if not (needs_receipt or needs_transaction_date):
+        return None
+
+    metadata, created = MpesaCallbackMetadata.objects.get_or_create(
+        payment=payment,
+        defaults={
+            "mpesa_receipt": mpesa_receipt,
+            "transaction_date": transaction_date,
+            "received_at": timezone.now(),
+            "status": "pending",
+        },
+    )
+
+    if not created and metadata.status == "pending":
+        update_fields = []
+
+        if metadata.mpesa_receipt is None and mpesa_receipt is not None:
+            metadata.mpesa_receipt = mpesa_receipt
+            update_fields.append("mpesa_receipt")
+
+        if (
+            metadata.transaction_date is None
+            and transaction_date is not None
+        ):
+            metadata.transaction_date = transaction_date
+            update_fields.append("transaction_date")
+
+        if update_fields:
+            metadata.save(
+                update_fields=update_fields + ["updated_at"]
+            )
+
+    if metadata.status != "pending":
+        return None
+
+    return metadata
+
+
 @transaction.atomic
+def _set_callback_metadata_status(metadata, status, error_code=""):
+    """Set a terminal callback-metadata status under a row lock."""
+
+    locked_metadata = MpesaCallbackMetadata.objects.select_for_update().get(
+        pk=metadata.pk
+    )
+
+    if locked_metadata.status != "pending":
+        return locked_metadata
+
+    locked_metadata.status = status
+    locked_metadata.last_error = error_code or ""
+    locked_metadata.save(
+        update_fields=["status", "last_error", "updated_at"]
+    )
+    return locked_metadata
+
+
+@transaction.atomic
+def _record_callback_metadata_attempt(
+    metadata,
+    *,
+    confirmed,
+    error_code=None,
+):
+    """Record a safe verification attempt for a pending metadata record."""
+
+    locked_metadata = MpesaCallbackMetadata.objects.select_for_update().get(
+        pk=metadata.pk
+    )
+
+    if locked_metadata.status != "pending":
+        return locked_metadata
+
+    locked_metadata.attempt_count += 1
+    locked_metadata.last_attempt_at = timezone.now()
+    locked_metadata.last_error = error_code or ""
+
+    update_fields = [
+        "attempt_count",
+        "last_attempt_at",
+        "last_error",
+        "updated_at",
+    ]
+
+    if confirmed:
+        locked_metadata.verified_at = locked_metadata.last_attempt_at
+        update_fields.append("verified_at")
+
+    locked_metadata.save(update_fields=update_fields)
+    return locked_metadata
+
+
+@transaction.atomic
+def _apply_verified_callback_metadata(metadata, payment):
+    """
+    Apply independently verified callback metadata to a paid payment.
+
+    The payment row is locked and rechecked immediately before updating.
+    Existing receipt and transaction-date values are never overwritten.
+    """
+
+    locked_metadata = MpesaCallbackMetadata.objects.select_for_update().get(
+        pk=metadata.pk
+    )
+
+    if locked_metadata.status != "pending":
+        return Payment.objects.get(pk=payment.pk)
+
+    locked_payment = Payment.objects.select_for_update().get(pk=payment.pk)
+
+    if (
+        locked_payment.status != "paid"
+        or not locked_payment.checkout_request_id
+        or not locked_payment.merchant_request_id
+    ):
+        locked_metadata.status = "failed"
+        locked_metadata.last_error = "payment_not_eligible"
+        locked_metadata.save(
+            update_fields=["status", "last_error", "updated_at"]
+        )
+        return locked_payment
+
+    metadata_fields = []
+    original_receipt = locked_payment.mpesa_receipt
+    attempted_receipt = False
+
+    if (
+        not locked_payment.mpesa_receipt
+        and locked_metadata.mpesa_receipt is not None
+    ):
+        receipt = _available_mpesa_receipt(
+            locked_payment,
+            locked_metadata.mpesa_receipt,
+        )
+        if receipt is not None:
+            locked_payment.mpesa_receipt = receipt
+            metadata_fields.append("mpesa_receipt")
+            attempted_receipt = True
+
+    if (
+        locked_payment.transaction_date is None
+        and locked_metadata.transaction_date is not None
+    ):
+        locked_payment.transaction_date = locked_metadata.transaction_date
+        metadata_fields.append("transaction_date")
+
+    if metadata_fields:
+        try:
+            with transaction.atomic():
+                locked_payment.save(
+                    update_fields=metadata_fields + ["updated_at"]
+                )
+        except IntegrityError:
+            if not attempted_receipt:
+                raise
+
+            logger.warning(
+                "Ignoring duplicate M-Pesa receipt during callback "
+                "metadata recovery for payment %s.",
+                locked_payment.pk,
+            )
+            locked_payment.mpesa_receipt = original_receipt
+
+            retry_fields = [
+                field
+                for field in metadata_fields
+                if field != "mpesa_receipt"
+            ]
+
+            if retry_fields:
+                with transaction.atomic():
+                    locked_payment.save(
+                        update_fields=retry_fields + ["updated_at"]
+                    )
+
+    locked_metadata.status = "applied"
+    locked_metadata.last_error = ""
+    locked_metadata.save(
+        update_fields=["status", "last_error", "updated_at"]
+    )
+
+    return locked_payment
+
+
+def _finalize_callback_metadata_after_verification(metadata, payment):
+    """
+    Update a pending metadata record after payment verification.
+
+    Paid outcomes apply the candidate metadata through the existing
+    safeguards. Failed outcomes discard the candidate. Non-terminal
+    outcomes keep the candidate pending with a safe error code.
+    """
+
+    verification_attempted = getattr(
+        payment,
+        "_verification_attempted",
+        True,
+    )
+    metadata.refresh_from_db()
+    payment = Payment.objects.get(pk=payment.pk)
+
+    if metadata.status != "pending":
+        return payment
+
+    if not verification_attempted:
+        return payment
+
+    if payment.status == "paid":
+        _record_callback_metadata_attempt(metadata, confirmed=True)
+        return _apply_verified_callback_metadata(metadata, payment)
+
+    if payment.status == "failed":
+        _record_callback_metadata_attempt(
+            metadata,
+            confirmed=False,
+            error_code="result_not_success",
+        )
+        _set_callback_metadata_status(
+            metadata,
+            "failed",
+            "result_not_success",
+        )
+        return payment
+
+    _record_callback_metadata_attempt(
+        metadata,
+        confirmed=False,
+        error_code="verification_unavailable",
+    )
+    return payment
+
+
+def _verify_and_apply_callback_metadata(metadata):
+    """
+    Verify a pending callback-metadata record and apply it if confirmed.
+
+    The provider query happens outside database transactions. The payment
+    is rechecked under a row lock before any metadata is written.
+    """
+
+    metadata.refresh_from_db()
+    payment = Payment.objects.get(pk=metadata.payment_id)
+
+    if metadata.status != "pending":
+        return payment
+
+    if (
+        payment.status not in {"processing", "unknown", "paid"}
+        or not payment.checkout_request_id
+        or not payment.merchant_request_id
+    ):
+        _set_callback_metadata_status(
+            metadata,
+            "failed",
+            "payment_not_eligible",
+        )
+        return payment
+
+    if payment.status == "paid":
+        needs_receipt = (
+            not payment.mpesa_receipt
+            and metadata.mpesa_receipt is not None
+        )
+        needs_transaction_date = (
+            payment.transaction_date is None
+            and metadata.transaction_date is not None
+        )
+
+        if not (needs_receipt or needs_transaction_date):
+            _set_callback_metadata_status(metadata, "applied")
+            return payment
+
+        confirmed, error_code = _stk_query_paid_success_result(payment)
+
+        if error_code == "cooldown":
+            return payment
+
+        _record_callback_metadata_attempt(
+            metadata,
+            confirmed=confirmed,
+            error_code=error_code,
+        )
+
+        if not confirmed:
+            return payment
+
+        return _apply_verified_callback_metadata(metadata, payment)
+
+    verified_payment = verify_payment(
+        payment,
+        mpesa_receipt=metadata.mpesa_receipt,
+        transaction_date=metadata.transaction_date,
+    )
+    return _finalize_callback_metadata_after_verification(
+        metadata,
+        verified_payment,
+    )
+
+
+def reconcile_callback_metadata(metadata):
+    """
+    Attempt verification for one pending callback-metadata record.
+
+    Returns the refreshed metadata record so callers can report its final
+    status without exposing payment identifiers.
+    """
+
+    _verify_and_apply_callback_metadata(metadata)
+    metadata.refresh_from_db()
+    return metadata
+
+
 def process_mpesa_callback(payload):
     """
-    Process a Safaricom M-Pesa STK callback.
-
-    The callback is used to resolve the payment result. Duplicate callbacks
-    for already-paid or already-failed payments are ignored.
-
-    Callbacks can resolve payments in "processing" or "unknown" states.
+    Use a callback only as a trigger for independent payment verification.
     """
 
     if not isinstance(payload, dict):
@@ -507,12 +1692,13 @@ def process_mpesa_callback(payload):
 
     checkout_request_id = stk_callback.get("CheckoutRequestID")
 
-    if not checkout_request_id:
+    if not isinstance(checkout_request_id, str) or not checkout_request_id:
         raise ValueError("Checkout request ID is missing from callback.")
+
+    merchant_request_id = stk_callback.get("MerchantRequestID")
 
     payment = (
         Payment.objects
-        .select_for_update()
         .filter(checkout_request_id=checkout_request_id)
         .first()
     )
@@ -522,88 +1708,65 @@ def process_mpesa_callback(payload):
             "Payment matching the callback was not found."
         )
 
-    result_code = stk_callback.get("ResultCode")
+    metadata = _callback_metadata_map(stk_callback)
+    receipt_value = metadata.get("MpesaReceiptNumber")
+    transaction_value = metadata.get("TransactionDate")
 
-    if result_code is None:
-        raise ValueError("M-Pesa callback ResultCode is missing.")
+    mpesa_receipt = _normalize_mpesa_receipt(receipt_value)
+    transaction_date = _parse_mpesa_transaction_date(transaction_value)
 
-    result_description = stk_callback.get("ResultDesc", "")
-
-    # Safely ignore duplicate callbacks for terminal states.
-    if payment.status in {"paid", "failed"}:
-        return payment
-
-    if payment.status not in {"initiating", "processing", "unknown"}:
-        raise ValueError(
-            f"Cannot process callback for payment status {payment.status}."
+    if receipt_value is not None and mpesa_receipt is None:
+        logger.warning(
+            "Ignoring invalid M-Pesa receipt metadata during "
+            "callback verification."
         )
 
-    if str(result_code) == "0":
-        callback_metadata = stk_callback.get("CallbackMetadata", {})
-
-        if not isinstance(callback_metadata, dict):
-            raise ValueError("Callback metadata is invalid.")
-
-        item_list = callback_metadata.get("Item", [])
-
-        if not isinstance(item_list, list):
-            raise ValueError("Callback metadata items are invalid.")
-
-        mpesa_receipt = None
-        transaction_date = None
-
-        for item in item_list:
-            if not isinstance(item, dict):
-                continue
-
-            name = item.get("Name")
-            value = item.get("Value")
-
-            if name == "MpesaReceiptNumber":
-                mpesa_receipt = value
-
-            elif name == "TransactionDate":
-                transaction_date = value
-
-        if not mpesa_receipt:
-            raise ValueError(
-                "M-Pesa receipt is missing from successful callback."
-            )
-
-        parsed_transaction_date = None
-
-        if transaction_date:
-            try:
-                parsed_transaction_date = timezone.datetime.strptime(
-                    str(transaction_date),
-                    "%Y%m%d%H%M%S",
-                )
-                parsed_transaction_date = timezone.make_aware(
-                    parsed_transaction_date,
-                    timezone.get_current_timezone(),
-                )
-            except (TypeError, ValueError, OverflowError):
-                # A malformed transaction timestamp should not discard
-                # a valid receipt and successful callback.
-                logger.warning(
-                    "Invalid transaction date in callback for payment %s.",
-                    payment.pk,
-                )
-                parsed_transaction_date = timezone.now()
-
-        return mark_payment_paid(
-            payment,
-            mpesa_receipt=str(mpesa_receipt),
-            transaction_date=parsed_transaction_date,
-            result_code=result_code,
-            result_description=(
-                result_description
-                or "Payment completed successfully."
-            ),
+    if transaction_value is not None and transaction_date is None:
+        logger.warning(
+            "Ignoring invalid M-Pesa transaction date metadata during "
+            "callback verification."
         )
 
-    return mark_payment_failed(
+    callback_metadata_allowed = _callback_metadata_allowed(
+        stk_callback,
+        merchant_request_id,
         payment,
-        result_code=result_code,
-        result_description=result_description or "Payment failed.",
+    )
+
+    if payment.status == "paid":
+        if not callback_metadata_allowed:
+            return payment
+
+        metadata_record = _store_callback_metadata(
+            payment,
+            mpesa_receipt=mpesa_receipt,
+            transaction_date=transaction_date,
+        )
+
+        if metadata_record is None:
+            return payment
+
+        return _verify_and_apply_callback_metadata(metadata_record)
+
+    if not callback_metadata_allowed:
+        logger.warning(
+            "Ignoring M-Pesa callback metadata for payment %s because "
+            "the callback was not eligible for metadata capture.",
+            payment.pk,
+        )
+        return verify_payment(payment)
+
+    metadata_record = _store_callback_metadata(
+        payment,
+        mpesa_receipt=mpesa_receipt,
+        transaction_date=transaction_date,
+    )
+
+    if metadata_record is not None:
+        return _verify_and_apply_callback_metadata(metadata_record)
+
+    return verify_payment(
+        payment,
+        mpesa_receipt=mpesa_receipt,
+        transaction_date=transaction_date,
     )

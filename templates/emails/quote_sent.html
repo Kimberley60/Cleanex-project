@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <body style="margin: 0; padding: 24px; background: #F7F8F5; color: #293633; font-family: Arial, sans-serif; line-height: 1.6;">
+    <main style="max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #E9E0D1; background: #ffffff;">
+      <h1 style="margin: 0 0 16px; color: #123B3A; font-size: 22px;">Your quotation is ready</h1>
+      <p>Your CLEANEX quotation is ready for review.</p>
+      <dl>
+        <dt><strong>Quotation reference</strong></dt>
+        <dd>Q-{{ quote_reference }}</dd>
+        <dt><strong>Service</strong></dt>
+        <dd>{{ service_name }}</dd>
+        <dt><strong>Proposed amount</strong></dt>
+        <dd>KES {{ proposed_amount|floatformat:2 }}</dd>
+        <dt><strong>Valid until</strong></dt>
+        <dd>{{ quote_valid_until|date:"F j, Y" }}</dd>
+      </dl>
+      <p>Please sign in to your CLEANEX account and visit <strong>My Quotations</strong> to review and respond to your quotation.</p>
+      <p>Thank you,<br>CLEANEX</p>
+    </main>
+  </body>
+</html>

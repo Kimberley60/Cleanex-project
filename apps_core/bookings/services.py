@@ -2,6 +2,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 from .models import Booking, BookingExtra
+from apps_core.customers.models import Customer
 from apps_core.staff.services import (
     assign_available_staff,
     check_staff_availability,
@@ -108,6 +109,7 @@ def get_availability_status(
 
 
 
+@transaction.atomic
 def change_booking_status(booking, new_status):
     """
     Safely change a booking's status according to the
@@ -127,6 +129,11 @@ def change_booking_status(booking, new_status):
             f"Invalid booking status: {new_status}"
         )
 
+    booking = (
+        Booking.objects
+        .select_for_update()
+        .get(pk=booking.pk)
+    )
     current_status = booking.status
 
     if current_status == new_status:
@@ -168,7 +175,7 @@ def change_booking_status(booking, new_status):
 
 
 @transaction.atomic
-def create_booking(customer, data):
+def create_booking(customer, data, *, created_by=None):
     """
     Create a booking and its associated extras.
 
@@ -177,7 +184,14 @@ def create_booking(customer, data):
     to the staff service layer.
     """
 
-    if not customer:
+    if created_by is not None:
+        customer = Customer.objects.filter(user=created_by).first()
+        if customer is None:
+            raise ValueError(
+                "Your account does not have a customer profile. "
+                "Please contact CLEANEX support before booking."
+            )
+    elif not customer:
         raise ValueError(
             "A customer is required."
         )
@@ -299,6 +313,7 @@ def create_booking(customer, data):
 
     booking = Booking.objects.create(
         customer=customer,
+        created_by=created_by,
 
         contact_name=data.get(
             "contact_name",
@@ -333,10 +348,11 @@ def create_booking(customer, data):
             BookingExtra(
                 booking=booking,
                 extra_service=extra,
+                extra_service_name=extra.name,
+                extra_service_price=extra.price,
             )
             for extra in extras
         ]
     )
 
     return booking
-

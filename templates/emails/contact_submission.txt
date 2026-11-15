@@ -1,0 +1,7 @@
+A visitor sent a message through the CLEANEX contact form.
+
+Name: {{ name }}
+Email: {{ email }}
+
+Message:
+{{ message }}

@@ -1,4 +1,5 @@
 from django.db import models
+from django.urls import reverse
 
 # Create your models here.
 
@@ -66,6 +67,29 @@ class HeroSlide(models.Model):
     secondary_button_url = models.URLField(
     blank=True
     )
+
+    BOOKING_URL_ALIASES = {
+        "/book",
+        "/book/",
+        "/booking",
+        "/booking/",
+    }
+
+    def primary_button_href(self):
+        """
+        Return the primary button destination.
+
+        Legacy booking paths are resolved through the named booking URL so
+        CMS content cannot point customers at a non-existent /book/ route.
+        Other configured URLs are preserved unchanged.
+        """
+
+        url = (self.primary_button_url or "").strip()
+
+        if url in self.BOOKING_URL_ALIASES:
+            return reverse("booking")
+
+        return url
 
     display_order = models.PositiveIntegerField(
         default=0

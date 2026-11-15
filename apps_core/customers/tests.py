@@ -1,7 +1,14 @@
 from decimal import Decimal
-from django.test import TestCase
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from unittest.mock import patch
+from django.contrib import admin
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, close_old_connections, transaction
+from django.test import RequestFactory, TestCase, TransactionTestCase
 from apps_core.bookings.models import Booking
 from apps_core.services.models import Service
+from .admin import CustomerAdmin
 from .models import Customer
 from .services import (
     get_customer_booking_count,
@@ -89,6 +96,24 @@ class CustomerServiceTests(TestCase):
             reused_customer.city,
             "Nairobi",
         )
+
+    def test_existing_customer_is_reused_case_insensitively_with_whitespace(self):
+        customer = Customer.objects.create(
+            full_name="Whitespace Customer",
+            email="whitespace@example.com",
+            phone="0712345678",
+            address="Original Address",
+            city="Nairobi",
+        )
+
+        reused_customer, created = get_or_create_customer(
+            full_name="Different Contact",
+            email=" \tWHITESPACE@EXAMPLE.COM\r\n",
+            phone="0799999999",
+        )
+
+        self.assertFalse(created)
+        self.assertEqual(reused_customer.pk, customer.pk)
 
 
     def test_customer_can_be_found_by_email(self):
@@ -303,3 +328,137 @@ class CustomerServiceTests(TestCase):
             )
 
 
+class CustomerEmailUniquenessTests(TestCase):
+    def create_customer(self, email, **overrides):
+        values = {
+            "full_name": "Email Identity Customer",
+            "email": email,
+            "phone": "0712345678",
+            "address": "Test Address",
+            "city": "Nairobi",
+        }
+        values.update(overrides)
+        return Customer.objects.create(**values)
+
+    def test_customer_model_normalizes_email_on_create(self):
+        customer = self.create_customer(" \tMixed.Case@example.com\r\n")
+
+        self.assertEqual(customer.email, "mixed.case@example.com")
+        customer.refresh_from_db()
+        self.assertEqual(customer.email, "mixed.case@example.com")
+
+    def test_booking_customer_lookup_matches_case_and_whitespace(self):
+        customer = self.create_customer("mixed.case@example.com")
+
+        found_customer = get_customer_by_email(
+            "\tMIXED.CASE@EXAMPLE.COM \n"
+        )
+
+        self.assertEqual(found_customer.pk, customer.pk)
+
+    def test_customer_admin_form_rejects_normalized_duplicate(self):
+        self.create_customer("duplicate@example.com")
+        request = RequestFactory().get("/admin/customers/customer/")
+        request.user = get_user_model().objects.create_superuser(
+            username="customer-email-admin",
+            email="customer-email-admin@example.com",
+            password="test-password",
+        )
+        form_class = CustomerAdmin(Customer, admin.site).get_form(request)
+        form = form_class(
+            data={
+                "full_name": "Duplicate Contact",
+                "email": " \tDUPLICATE@example.com\r\n",
+                "phone": "0799999999",
+                "address": "Other Address",
+                "county": "",
+                "city": "Nairobi",
+                "is_repeat_customer": False,
+                "notes": "",
+                "user": "",
+            },
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn(
+            "A customer with this email address already exists.",
+            str(form.errors),
+        )
+
+    def test_database_constraint_rejects_raw_case_whitespace_duplicate(self):
+        self.create_customer("database@example.com")
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Customer.objects.bulk_create(
+                    [
+                        Customer(
+                            full_name="Raw Duplicate",
+                            email=" \tDATABASE@EXAMPLE.COM\r\n",
+                            phone="0799999999",
+                            address="Other Address",
+                            city="Nairobi",
+                        )
+                    ]
+                )
+
+    def test_phone_number_remains_non_unique(self):
+        first = self.create_customer(
+            "first-phone-owner@example.com",
+            phone="0712345678",
+        )
+        second = self.create_customer(
+            "second-phone-owner@example.com",
+            phone="0712345678",
+        )
+
+        self.assertNotEqual(first.pk, second.pk)
+        self.assertEqual(
+            Customer.objects.filter(phone="0712345678").count(),
+            2,
+        )
+
+
+class CustomerEmailConcurrencyTests(TransactionTestCase):
+    reset_sequences = True
+
+    def test_concurrent_duplicate_creations_return_one_customer(self):
+        barrier = Barrier(2)
+        manager = Customer.objects
+        original_create = manager.create
+
+        def synchronized_create(*args, **kwargs):
+            barrier.wait(timeout=10)
+            return original_create(*args, **kwargs)
+
+        def create_customer(email):
+            close_old_connections()
+            try:
+                return get_or_create_customer(
+                    full_name="Concurrent Customer",
+                    email=email,
+                    phone="0712345678",
+                    address="Test Address",
+                    city="Nairobi",
+                )
+            finally:
+                close_old_connections()
+
+        with patch.object(manager, "create", side_effect=synchronized_create):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                results = list(
+                    executor.map(
+                        create_customer,
+                        (
+                            "Concurrent@example.com",
+                            " \tCONCURRENT@example.com\r\n",
+                        ),
+                    )
+                )
+
+        self.assertEqual(results[0][0].pk, results[1][0].pk)
+        self.assertEqual(sorted(created for _, created in results), [False, True])
+        self.assertEqual(
+            Customer.objects.filter(email="concurrent@example.com").count(),
+            1,
+        )

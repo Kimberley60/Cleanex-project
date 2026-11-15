@@ -19,7 +19,23 @@
             <li><a href="/about/">About</a></li>
             <li><a href="/gallery/">Gallery</a></li>
             <li><a href="/contact/">Contact</a></li>
+            {% if user.is_authenticated %}
+                <li><a href="{% url 'customer_dashboard' %}">My Account</a></li>
+            {% else %}
+                <li><a href="{% url 'login' %}">Sign In</a></li>
+            {% endif %}
         </ul>
+
+        {% if user.is_authenticated %}
+            <form method="post" action="{% url 'logout' %}" class="nav-auth-form">
+                {% csrf_token %}
+                <button type="submit" class="nav-auth-button">Sign Out</button>
+            </form>
+        {% else %}
+            <a href="{% url 'customer_register' %}" class="nav-auth-button">
+                Create Account
+            </a>
+        {% endif %}
 
         <a href="/quote/" class="quote-btn">
             Get a Quote

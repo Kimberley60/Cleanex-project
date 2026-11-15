@@ -1,0 +1,30 @@
+{% extends "base/base.html" %}
+
+{% block title %}Resend Verification | CLEANEX{% endblock %}
+
+{% block content %}
+<section class="account-page">
+    <div class="account-card">
+        <p class="account-eyebrow">EMAIL VERIFICATION</p>
+        <h1>Request a new link</h1>
+        <p class="account-intro">
+            Enter the email address used to register. If there is a pending
+            account, we will send a new verification link.
+        </p>
+
+        <form method="post" class="account-form" novalidate>
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="account-field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% for error in field.errors %}
+                        <div class="account-field-error" role="alert">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+            <button type="submit" class="account-submit">Send verification link</button>
+        </form>
+    </div>
+</section>
+{% endblock %}

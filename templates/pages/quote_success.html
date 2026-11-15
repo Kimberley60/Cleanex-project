@@ -1,0 +1,26 @@
+{% extends "base/base.html" %}
+
+{% block title %}Quote Request Received | CLEANEX{% endblock %}
+
+{% block content %}
+<section class="quote-page quote-success-page">
+    <div class="container">
+        <div class="quote-success-card text-center">
+            <div class="quote-success-icon" aria-hidden="true">
+                <i class="fa-solid fa-check"></i>
+            </div>
+            <span class="quote-eyebrow">REQUEST RECEIVED</span>
+            <h1 class="quote-title">Thank You for Your Request</h1>
+            <p class="quote-subtitle">
+                Your quote request has been received. Our team will review
+                the details and contact you. This confirmation does not mean
+                that a quotation has been prepared or accepted, and no booking
+                has been confirmed.
+            </p>
+            <a href="{% url 'services' %}" class="btn btn-primary mt-4">
+                Explore Our Services
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}

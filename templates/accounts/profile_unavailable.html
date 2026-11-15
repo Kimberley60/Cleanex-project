@@ -1,0 +1,30 @@
+{% extends "base/base.html" %}
+
+{% block title %}Profile Unavailable | CLEANEX{% endblock %}
+
+{% block content %}
+<section class="account-page">
+    <div class="account-card account-message-card">
+        <p class="account-eyebrow">CUSTOMER PROFILE</p>
+        <h1>We need to review your account</h1>
+        <p class="account-intro">
+            Your sign-in is valid, but no customer profile is linked to this
+            account yet. To protect your existing customer and booking
+            records, we have not created or linked a profile automatically.
+        </p>
+        <p class="account-intro">
+            Please contact CLEANEX support and we will review your account.
+        </p>
+        <a class="account-submit account-button-link" href="{% url 'contact' %}">
+            Contact CLEANEX support
+        </a>
+        <p class="account-alternate">
+            Need to sign in to a different account?
+            <form method="post" action="{% url 'logout' %}" class="account-logout-form">
+                {% csrf_token %}
+                <button type="submit">Sign out</button>
+            </form>
+        </p>
+    </div>
+</section>
+{% endblock %}

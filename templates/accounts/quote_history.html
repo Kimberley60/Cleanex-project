@@ -1,0 +1,99 @@
+{% extends "base/base.html" %}
+
+{% block title %}My Quote History | CLEANEX{% endblock %}
+
+{% block content %}
+<section class="account-page">
+    <div class="account-card account-card-wide">
+        <p class="account-eyebrow">CUSTOMER ACCOUNT</p>
+        <h1>My quote history</h1>
+        <p class="account-intro">
+            Review your quote requests and any quotations sent by CLEANEX.
+        </p>
+
+        {% if quote_requests %}
+            <ul class="account-quote-list">
+                {% for quote in quote_requests %}
+                    <li>
+                        <article class="account-quote-item">
+                            <h2>Quote request #{{ quote.pk }}</h2>
+                            <dl class="account-quote-details">
+                                <div>
+                                    <dt>Service</dt>
+                                    <dd>
+                                        {% if quote.service %}
+                                            {{ quote.service.name }}
+                                        {% else %}
+                                            Service unavailable
+                                        {% endif %}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Status</dt>
+                                    <dd>{{ quote.get_status_display }}</dd>
+                                </div>
+                                <div>
+                                    <dt>Submitted</dt>
+                                    <dd>{{ quote.created_at|date:"Y-m-d" }}</dd>
+                                </div>
+                                {% if quote.quote_sent_at %}
+                                    <div>
+                                        <dt>Proposed amount</dt>
+                                        <dd>KSh {{ quote.proposed_amount|floatformat:2 }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Quotation expires</dt>
+                                        <dd>{{ quote.quote_valid_until|date:"Y-m-d" }}</dd>
+                                    </div>
+                                {% endif %}
+                            </dl>
+                            {% if quote.status == "sent" %}
+                                <div
+                                    class="account-quote-actions"
+                                    aria-label="Quotation decision actions"
+                                >
+                                    <form
+                                        method="post"
+                                        action="{% url 'accept_customer_quote' quote_id=quote.pk %}"
+                                    >
+                                        {% csrf_token %}
+                                        <button
+                                            type="submit"
+                                            class="account-submit"
+                                            aria-label="Accept quote request #{{ quote.pk }}"
+                                        >
+                                            Accept quotation
+                                        </button>
+                                    </form>
+                                    <form
+                                        method="post"
+                                        action="{% url 'decline_customer_quote' quote_id=quote.pk %}"
+                                    >
+                                        {% csrf_token %}
+                                        <button
+                                            type="submit"
+                                            class="account-submit account-quote-action-decline"
+                                            aria-label="Decline quote request #{{ quote.pk }}"
+                                        >
+                                            Decline quotation
+                                        </button>
+                                    </form>
+                                </div>
+                            {% endif %}
+                        </article>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div class="account-quote-empty">
+                <h2>No quote requests yet</h2>
+                <p>Your quote requests will appear here after you submit one.</p>
+            </div>
+        {% endif %}
+
+        <div class="account-links">
+            <a href="{% url 'customer_profile' %}">Back to my profile</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

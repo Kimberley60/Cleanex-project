@@ -1,0 +1,135 @@
+{% extends "base/base.html" %}
+
+{% block title %}My Account | CLEANEX{% endblock %}
+
+{% block content %}
+<section class="account-page dashboard-page">
+    <div class="account-card account-card-wide dashboard-shell">
+        <header class="dashboard-header">
+            <div>
+                <p class="account-eyebrow">CUSTOMER ACCOUNT</p>
+                <h1>Welcome back{% if user.first_name %}, {{ user.first_name }}{% endif %}</h1>
+                <p class="account-intro">
+                    A clear view of your cleaning bookings and quotation requests.
+                </p>
+            </div>
+            <a class="dashboard-primary-link" href="{% url 'booking' %}">
+                Book a cleaning
+            </a>
+        </header>
+
+        <section class="dashboard-overview" aria-label="Account overview">
+            <article class="dashboard-stat">
+                <span class="dashboard-stat-label">Total bookings</span>
+                <strong>{{ booking_count }}</strong>
+                <span class="dashboard-stat-note">Bookings placed through your account</span>
+            </article>
+            <article class="dashboard-stat dashboard-stat-sand">
+                <span class="dashboard-stat-label">Quotation requests</span>
+                <strong>{{ quotation_count }}</strong>
+                <span class="dashboard-stat-note">Requests linked to your customer profile</span>
+            </article>
+        </section>
+
+        <section class="dashboard-section" aria-labelledby="dashboard-bookings-title">
+            <div class="dashboard-section-heading">
+                <div>
+                    <p class="account-eyebrow">YOUR SCHEDULE</p>
+                    <h2 id="dashboard-bookings-title">Recent bookings</h2>
+                </div>
+                <a href="{% url 'booking' %}">Make a booking</a>
+            </div>
+            {% if recent_bookings %}
+                <div class="dashboard-record-list">
+                    {% for booking in recent_bookings %}
+                        <article class="dashboard-record">
+                            <div class="dashboard-record-heading">
+                                <h3>{{ booking.reference }}</h3>
+                                <span class="dashboard-status">{{ booking.status_display }}</span>
+                            </div>
+                            <dl class="dashboard-details">
+                                <div>
+                                    <dt>Service</dt>
+                                    <dd>{{ booking.service_name }}</dd>
+                                </div>
+                                <div>
+                                    <dt>Scheduled</dt>
+                                    <dd>{{ booking.booking_date|date:"M j, Y" }} at {{ booking.booking_time|time:"g:i A" }}</dd>
+                                </div>
+                                {% if booking.payment_status_display %}
+                                    <div>
+                                        <dt>Latest payment</dt>
+                                        <dd>{{ booking.payment_status_display }}</dd>
+                                    </div>
+                                {% endif %}
+                            </dl>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="dashboard-empty">
+                    <h3>No bookings yet</h3>
+                    <p>Your account bookings will appear here when you book a cleaning.</p>
+                    <a href="{% url 'booking' %}">Explore booking options</a>
+                </div>
+            {% endif %}
+        </section>
+
+        <section class="dashboard-section" aria-labelledby="dashboard-quotes-title">
+            <div class="dashboard-section-heading">
+                <div>
+                    <p class="account-eyebrow">YOUR REQUESTS</p>
+                    <h2 id="dashboard-quotes-title">Recent quotations</h2>
+                </div>
+                <a href="{% url 'customer_quote_history' %}">View all quotations</a>
+            </div>
+            {% if recent_quotations %}
+                <div class="dashboard-record-list">
+                    {% for quotation in recent_quotations %}
+                        <article class="dashboard-record">
+                            <div class="dashboard-record-heading">
+                                <h3>{{ quotation.reference }}</h3>
+                                <span class="dashboard-status">{{ quotation.status_display }}</span>
+                            </div>
+                            <dl class="dashboard-details">
+                                <div>
+                                    <dt>Service</dt>
+                                    <dd>{{ quotation.service_name }}</dd>
+                                </div>
+                                <div>
+                                    <dt>Submitted</dt>
+                                    <dd>{{ quotation.created_at|date:"M j, Y" }}</dd>
+                                </div>
+                                {% if quotation.proposed_amount != None %}
+                                    <div>
+                                        <dt>Proposed amount</dt>
+                                        <dd>KSh {{ quotation.proposed_amount|floatformat:2 }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if quotation.quote_valid_until %}
+                                    <div>
+                                        <dt>Valid until</dt>
+                                        <dd>{{ quotation.quote_valid_until|date:"M j, Y" }}</dd>
+                                    </div>
+                                {% endif %}
+                            </dl>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="dashboard-empty">
+                    <h3>No quotation requests yet</h3>
+                    <p>When you request a quote, its progress will be shown here.</p>
+                    <a href="/quote/">Request a quotation</a>
+                </div>
+            {% endif %}
+        </section>
+
+        <nav class="dashboard-account-links" aria-label="Account links">
+            <a href="{% url 'customer_profile' %}">View or update your profile</a>
+            <a href="{% url 'customer_quote_history' %}">Quotation history</a>
+            <a href="{% url 'booking' %}">Booking options</a>
+        </nav>
+    </div>
+</section>
+{% endblock %}

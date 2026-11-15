@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from apps_core.services.models import Service, ExtraService
 from apps_core.customers.models import Customer
@@ -16,9 +17,17 @@ class Booking(models.Model):
 
     customer = models.ForeignKey(
         Customer,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="bookings"
 
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_bookings",
     )
 
     contact_name = models.CharField(
@@ -108,8 +117,25 @@ class BookingExtra(models.Model):
 
     extra_service = models.ForeignKey(
         ExtraService,
-        on_delete=models.CASCADE
+        on_delete=models.PROTECT
     )
 
+    extra_service_name = models.CharField(
+        max_length=100,
+    )
+
+    extra_service_price = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+    )
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.extra_service_id:
+            extra_service = self.extra_service
+            self.extra_service_name = extra_service.name
+            self.extra_service_price = extra_service.price
+
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.booking} - {self.extra_service}"
+        return f"{self.booking} - {self.extra_service_name}"

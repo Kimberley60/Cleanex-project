@@ -8,15 +8,33 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from apps_core.bookings.models import Booking
-from .models import Payment
+from apps_core.core.rate_limit import (
+    ip_booking_scope,
+    ip_scope,
+    rate_limited,
+    user_scope,
+)
+from .models import MpesaCallbackMetadata, Payment
 from .services import (
     create_payment,
     get_payment_for_booking,
     initiate_payment,
     process_mpesa_callback,
+    reconcile_callback_metadata,
+    verify_payment,
 )
 
 logger = logging.getLogger(__name__)
+
+PAYMENT_STATUS_RATE_LIMITS = (
+    ip_scope("payment_status", 10, 3600),
+)
+
+PAYMENT_INITIATION_RATE_LIMITS = (
+    ip_scope("payment_initiation", 10, 3600),
+    user_scope("payment_initiation", 10, 86400),
+    ip_booking_scope("payment_initiation", 10, 3600, "booking_id"),
+)
 
 
 def _booking_success_redirect(booking):
@@ -25,6 +43,7 @@ def _booking_success_redirect(booking):
 
 
 @require_POST
+@rate_limited(*PAYMENT_INITIATION_RATE_LIMITS)
 def initiate_booking_payment(request, booking_id):
     """
     Start an M-Pesa payment for a booking created in this browser session.
@@ -47,6 +66,13 @@ def initiate_booking_payment(request, booking_id):
 
     success_url = _booking_success_redirect(booking)
 
+    if booking.status == "cancelled":
+        messages.error(
+            request,
+            "This booking has been cancelled. Payment cannot be initiated.",
+        )
+        return redirect(success_url)
+
     phone_number = (
         getattr(booking, "contact_phone", "")
         or getattr(booking.customer, "phone", "")
@@ -68,6 +94,13 @@ def initiate_booking_payment(request, booking_id):
             locked_booking = Booking.objects.select_for_update().get(
                 pk=booking.pk
             )
+
+            if locked_booking.status == "cancelled":
+                messages.error(
+                    request,
+                    "This booking has been cancelled. Payment cannot be initiated.",
+                )
+                return redirect(success_url)
 
             existing_payment = (
                 Payment.objects.select_for_update()
@@ -186,6 +219,155 @@ def initiate_booking_payment(request, booking_id):
     return redirect(success_url)
 
 
+@require_POST
+@rate_limited(*PAYMENT_STATUS_RATE_LIMITS)
+def check_booking_payment_status(request, booking_id):
+    """
+    Check the latest M-Pesa payment status without starting a new payment.
+    """
+    session_booking_id = request.session.get("booking_success_id")
+
+    if session_booking_id != booking_id:
+        return HttpResponseNotFound("Booking not found.")
+
+    booking = get_object_or_404(
+        Booking.objects.select_related("customer"),
+        pk=booking_id,
+    )
+
+    success_url = _booking_success_redirect(booking)
+    payment = get_payment_for_booking(booking)
+
+    if payment is None:
+        messages.info(
+            request,
+            "No M-Pesa payment attempt has been recorded for this booking yet.",
+        )
+        return redirect(success_url)
+
+    checkout_request_id = payment.checkout_request_id
+    has_checkout_id = (
+        isinstance(checkout_request_id, str)
+        and bool(checkout_request_id.strip())
+    )
+    verification_failed = False
+
+    if payment.status in {"processing", "unknown"} and has_checkout_id:
+        pending_metadata = MpesaCallbackMetadata.objects.filter(
+            payment=payment,
+            status="pending",
+        ).first()
+
+        try:
+            if pending_metadata is not None:
+                reconcile_callback_metadata(pending_metadata)
+            else:
+                verify_payment(payment)
+        except Exception:
+            verification_failed = True
+            logger.exception(
+                "Unexpected error checking M-Pesa status for booking %s.",
+                booking.pk,
+            )
+
+        payment = get_payment_for_booking(booking)
+
+        if payment is None:
+            messages.error(
+                request,
+                "We couldn't verify your payment status. "
+                "Please contact CLEANEX support.",
+            )
+            return redirect(success_url)
+
+    if (
+        verification_failed
+        and payment.status in {"processing", "unknown"}
+    ):
+        messages.warning(
+            request,
+            "We could not check the M-Pesa payment status right now. "
+            "Please try again later; do not start another payment yet.",
+        )
+        return redirect(success_url)
+
+    if payment.status == "paid":
+        messages.success(
+            request,
+            "Your M-Pesa payment has been confirmed.",
+        )
+
+    elif payment.status == "failed":
+        messages.warning(
+            request,
+            "Your previous M-Pesa payment attempt was unsuccessful. "
+            "You can try again below.",
+        )
+
+    elif payment.status == "processing":
+        if has_checkout_id:
+            messages.info(
+                request,
+                "Your M-Pesa payment is still being processed, or "
+                "verification is temporarily unavailable. Please wait "
+                "for the result; do not start another payment while "
+                "the outcome is unresolved.",
+            )
+        else:
+            messages.warning(
+                request,
+                "We cannot check this payment status right now because "
+                "the M-Pesa reference is missing. Please contact "
+                "CLEANEX support.",
+            )
+
+    elif payment.status == "unknown":
+        if has_checkout_id:
+            messages.warning(
+                request,
+                "We could not confirm the M-Pesa payment outcome yet. "
+                "Verification may be temporarily unavailable; do not "
+                "start another payment while the outcome is unresolved. "
+                "Please check again later or contact CLEANEX support.",
+            )
+        else:
+            messages.error(
+                request,
+                "We cannot check this payment status right now because "
+                "the M-Pesa reference is missing. Please contact "
+                "CLEANEX support.",
+            )
+
+    elif payment.status == "initiating":
+        messages.info(
+            request,
+            "Your M-Pesa payment request is being submitted. "
+            "Please wait before taking further action.",
+        )
+
+    elif payment.status == "pending":
+        messages.info(
+            request,
+            "No M-Pesa payment request is currently awaiting confirmation. "
+            "You can start a payment below.",
+        )
+
+    else:
+        logger.error(
+            "Unexpected payment status %r for payment %s on booking %s.",
+            payment.status,
+            payment.pk,
+            booking.pk,
+        )
+        messages.error(
+            request,
+            "We couldn't verify your payment status. "
+            "Please contact CLEANEX support.",
+        )
+
+    return redirect(success_url)
+
+
 @csrf_exempt
 @require_POST
 def mpesa_callback(request):
@@ -244,7 +426,7 @@ def mpesa_callback(request):
     return JsonResponse(
         {
             "ResultCode": 0,
-            "ResultDesc": "Callback processed successfully.",
+            "ResultDesc": "Callback received for verification.",
         },
         status=200,
     )

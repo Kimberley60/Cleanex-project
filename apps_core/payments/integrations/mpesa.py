@@ -6,6 +6,140 @@ import requests
 from decouple import config
 
 
+class MpesaProviderError(requests.RequestException):
+    """Provider HTTP error with safe diagnostic metadata."""
+
+    def __init__(
+        self,
+        message,
+        *,
+        operation,
+        status_code=None,
+        retry_after=None,
+        request_id=None,
+        error_code=None,
+        error_message=None,
+    ):
+        super().__init__(message)
+        self.operation = operation
+        self.status_code = status_code
+        self.retry_after = retry_after
+        self.request_id = request_id
+        self.error_code = error_code
+        self.error_message = error_message
+
+
+class MpesaLocalValidationError(ValueError):
+    """Local validation/configuration failure before any Daraja HTTP request."""
+
+
+_REQUEST_ID_HEADERS = (
+    "x-request-id",
+    "x-correlation-id",
+    "request-id",
+    "x-requestid",
+    "x-amzn-requestid",
+    "x-amzn-trace-id",
+)
+
+
+def _header_value(headers, name):
+    lowered = {
+        str(key).lower(): value
+        for key, value in headers.items()
+    }
+    value = lowered.get(name.lower())
+    if value:
+        return str(value).strip()
+    return None
+
+
+def _response_diagnostics(response):
+    headers = getattr(response, "headers", None) or {}
+    retry_after = _header_value(headers, "retry-after")
+    request_id = None
+    for header_name in _REQUEST_ID_HEADERS:
+        request_id = _header_value(headers, header_name)
+        if request_id:
+            request_id = request_id[:200]
+            break
+    return retry_after, request_id
+
+
+def _safe_error_value(value, max_length=200, *, redact_phone=False):
+    if value is None:
+        return None
+
+    text = re.sub(r"[\r\n]+", " ", str(value)).strip()
+
+    if not text:
+        return None
+
+    if redact_phone:
+        text = re.sub(
+            r"(?<!\d)(?:\+?254|0)?[17]\d{8}(?!\d)",
+            "[redacted]",
+            text,
+        )
+
+    return text[:max_length]
+
+
+def _safe_error_details(response):
+    """Extract safe structured error fields without logging bodies."""
+
+    error_code = None
+    error_message = None
+    request_id = None
+
+    try:
+        data = response.json()
+    except Exception:
+        data = None
+
+    if isinstance(data, dict):
+        error_code = _safe_error_value(
+            data.get("errorCode")
+            or data.get("error_code")
+            or data.get("code"),
+            max_length=100,
+        )
+        error_message = _safe_error_value(
+            data.get("errorMessage")
+            or data.get("error_message")
+            or data.get("message"),
+            max_length=200,
+            redact_phone=True,
+        )
+        request_id = _safe_error_value(
+            data.get("requestId")
+            or data.get("request_id")
+            or data.get("RequestId"),
+            max_length=200,
+        )
+
+    return error_code, error_message, request_id
+
+
+def _raise_for_status(response, operation):
+    status_code = getattr(response, "status_code", None)
+    if isinstance(status_code, int) and status_code >= 400:
+        retry_after, request_id = _response_diagnostics(response)
+        error_code, error_message, body_request_id = _safe_error_details(
+            response
+        )
+        request_id = request_id or body_request_id
+        raise MpesaProviderError(
+            f"M-Pesa {operation} request failed with HTTP {status_code}.",
+            operation=operation,
+            status_code=status_code,
+            retry_after=retry_after,
+            request_id=request_id,
+            error_code=error_code,
+            error_message=error_message,
+        )
+    response.raise_for_status()
+
 
 class MpesaIntegration:
     """
@@ -74,18 +208,67 @@ class MpesaIntegration:
             "/mpesa/stkpush/v1/processrequest"
         )
 
+    def query_stk_push(self, checkout_request_id):
+        """
+        Query the result of an existing M-Pesa STK Push request.
+
+        Payment status decisions remain in the payment service layer.
+        """
+
+        if not checkout_request_id:
+            raise ValueError("Checkout request ID is required.")
+
+        timestamp = datetime.now().strftime(
+            "%Y%m%d%H%M%S"
+        )
+
+        payload = {
+            "BusinessShortCode": self.shortcode,
+            "Password": self._generate_password(timestamp),
+            "Timestamp": timestamp,
+            "CheckoutRequestID": checkout_request_id,
+        }
+
+        response = requests.post(
+            f"{self.base_url}/mpesa/stkpushquery/v1/query",
+            json=payload,
+            headers={
+                "Authorization": (
+                    f"Bearer {self.get_access_token()}"
+                ),
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+
+        _raise_for_status(response, "stk_query")
+
+        try:
+            result = response.json()
+        except ValueError:
+            raise ValueError(
+                "M-Pesa STK Push Query returned invalid JSON."
+            ) from None
+
+        if not isinstance(result, dict):
+            raise ValueError(
+                "M-Pesa STK Push Query returned an unexpected response."
+            )
+
+        return result
+
     def get_access_token(self):
         """
         Request an OAuth access token from Daraja.
         """
 
         if not self.consumer_key:
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "MPESA_CONSUMER_KEY is not configured."
             )
 
         if not self.consumer_secret:
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "MPESA_CONSUMER_SECRET is not configured."
             )
 
@@ -98,7 +281,7 @@ class MpesaIntegration:
             timeout=30,
         )
 
-        response.raise_for_status()
+        _raise_for_status(response, "oauth")
 
         data = response.json()
 
@@ -118,12 +301,12 @@ class MpesaIntegration:
         """
 
         if not self.shortcode:
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "MPESA_SHORTCODE is not configured."
             )
 
         if not self.passkey:
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "MPESA_PASSKEY is not configured."
             )
 
@@ -150,7 +333,7 @@ class MpesaIntegration:
         """
 
         if not phone_number:
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "A phone number is required."
             )
 
@@ -166,7 +349,7 @@ class MpesaIntegration:
             phone = "254" + phone
 
         if not re.fullmatch(r"254[71]\d{8}", phone):
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "Enter a valid Kenyan mobile number, "
                 "for example 0712345678 or 254712345678."
             )
@@ -193,17 +376,17 @@ class MpesaIntegration:
         try:
             amount = Decimal(str(amount))
         except (InvalidOperation, TypeError, ValueError):
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "A valid payment amount is required."
             ) from None
 
         if not amount.is_finite() or amount <= Decimal("0"):
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "STK Push amount must be greater than zero."
             )
 
         if amount != amount.to_integral_value():
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "STK Push amount must be a whole number "
                 "of Kenyan shillings."
             )
@@ -216,22 +399,22 @@ class MpesaIntegration:
         )
 
         if not account_reference:
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "An account reference is required."
             )
 
         if not transaction_description:
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "A transaction description is required."
             )
 
         if not self.shortcode:
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "MPESA_SHORTCODE is not configured."
             )
 
         if not self.callback_url:
-            raise ValueError(
+            raise MpesaLocalValidationError(
                 "MPESA_CALLBACK_URL is not configured."
             )
 
@@ -277,6 +460,6 @@ class MpesaIntegration:
             timeout=30,
         )
 
-        response.raise_for_status()
+        _raise_for_status(response, "stk_push")
 
         return response.json()

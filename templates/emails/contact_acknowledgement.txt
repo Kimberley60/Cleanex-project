@@ -1,0 +1,7 @@
+Hello {{ name }},
+
+Thank you for contacting CLEANEX. Your enquiry has been received.
+
+Our team will review your message and get back to you as soon as possible.
+
+CLEANEX Team

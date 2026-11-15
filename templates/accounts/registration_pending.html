@@ -1,0 +1,20 @@
+{% extends "base/base.html" %}
+
+{% block title %}Verify Your Email | CLEANEX{% endblock %}
+
+{% block content %}
+<section class="account-page">
+    <div class="account-card account-message-card">
+        <p class="account-eyebrow">ONE LAST STEP</p>
+        <h1>Check your email</h1>
+        <p class="account-intro">
+            Follow the verification link we sent to activate your account.
+            The link expires after the configured password-reset timeout.
+        </p>
+        <a class="account-submit account-button-link"
+           href="{% url 'customer_resend_verification' %}">
+            Request another verification email
+        </a>
+    </div>
+</section>
+{% endblock %}

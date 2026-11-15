@@ -2,7 +2,9 @@
     <div class="container">
         <div class="footer-grid">
             <section class="footer-brand" aria-labelledby="footer-brand-name">
-                <h2 class="footer-brand-name" id="footer-brand-name">CLEANEX</h2>
+                <a class="footer-brand-link" href="{% url 'home' %}">
+                    <span class="footer-brand-name" id="footer-brand-name">CLEANEX</span>
+                </a>
                 <p class="footer-description">
                     Professional cleaning services for homes and businesses.
                 </p>
@@ -11,19 +13,28 @@
             <nav class="footer-navigation" aria-labelledby="footer-navigation-heading">
                 <h2 class="footer-heading" id="footer-navigation-heading">Quick Links</h2>
                 <ul class="footer-links">
-                    <li><a href="/" class="footer-link">Home</a></li>
-                    <li><a href="/services/" class="footer-link">Services</a></li>
-                    <li><a href="/quote/" class="footer-link">Quote</a></li>
+                    <li><a href="{% url 'home' %}" class="footer-link">Home</a></li>
+                    <li><a href="{% url 'services' %}" class="footer-link">Services</a></li>
+                    <li><a href="{% url 'quote' %}" class="footer-link">Get a quote</a></li>
+                    <li><a href="{% url 'contact' %}" class="footer-link">Contact</a></li>
                 </ul>
             </nav>
 
             <section class="footer-contact-section" aria-labelledby="footer-contact-heading">
                 <h2 class="footer-heading" id="footer-contact-heading">Contact</h2>
                 <ul class="footer-contact">
-                    <li class="footer-contact-item">Nairobi, Kenya</li>
-                    <li class="footer-contact-item">+254 700 000 000</li>
+                    <li>
+                        <a class="footer-contact-link" href="mailto:cleanexbusiness@gmail.com">
+                            cleanexbusiness@gmail.com
+                        </a>
+                    </li>
                 </ul>
             </section>
+        </div>
+        <div class="footer-bottom">
+            <p class="footer-copyright">
+                &copy; {% now "Y" %} CLEANEX. All rights reserved.
+            </p>
         </div>
     </div>
 </footer>

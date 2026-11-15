@@ -95,7 +95,7 @@
 
                             <h2 class="h5 mb-3">M-Pesa Payment</h2>
 
-                            {% with payment=booking.payments.all|first %}
+                            {% with payment=latest_payment %}
 
                                 {% if payment %}
 
@@ -169,8 +169,27 @@
                                             Your payment request has been sent.
                                             Check your phone for the M-Pesa prompt
                                             and follow the instructions. This page
-                                            may not update automatically.
+                                            may not update automatically; if
+                                            verification is temporarily unavailable,
+                                            wait and do not start another payment.
                                         </div>
+
+                                        {% if payment.checkout_request_id %}
+                                            <form
+                                                method="post"
+                                                action="{% url 'payments:check_booking_payment_status' booking.pk %}"
+                                                class="mt-3"
+                                            >
+                                                {% csrf_token %}
+
+                                                <button type="submit"
+                                                        class="btn btn-outline-primary w-100">
+                                                    <i class="fa-solid fa-arrows-rotate me-2"
+                                                       aria-hidden="true"></i>
+                                                    Check M-Pesa status
+                                                </button>
+                                            </form>
+                                        {% endif %}
 
                                     <!-- Unknown / uncertain result -->
                                     {% elif payment.status == "unknown" %}
@@ -180,11 +199,35 @@
                                             <i class="fa-solid fa-triangle-exclamation me-2"
                                                aria-hidden="true"></i>
                                             We could not confirm the outcome of
-                                            your payment request. Do not initiate
-                                            another payment yet. Please contact
-                                            CLEANEX support so the transaction can
-                                            be checked before you retry.
+                                            your payment request yet; verification
+                                            may be temporarily unavailable. Do not
+                                            start another payment unless the
+                                            attempt is confirmed unsuccessful.
                                         </div>
+
+                                        {% if payment.checkout_request_id %}
+                                            <form
+                                                method="post"
+                                                action="{% url 'payments:check_booking_payment_status' booking.pk %}"
+                                                class="mt-3"
+                                            >
+                                                {% csrf_token %}
+
+                                                <button type="submit"
+                                                        class="btn btn-outline-primary w-100">
+                                                    <i class="fa-solid fa-arrows-rotate me-2"
+                                                       aria-hidden="true"></i>
+                                                    Check M-Pesa status
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <p class="small text-muted mt-3">
+                                                We cannot check this payment
+                                                status right now because the
+                                                M-Pesa reference is missing.
+                                                Please contact CLEANEX support.
+                                            </p>
+                                        {% endif %}
 
                                     <!-- Failed -->
                                     {% elif payment.status == "failed" %}

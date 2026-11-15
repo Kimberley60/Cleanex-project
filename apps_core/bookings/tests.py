@@ -1,11 +1,72 @@
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal
-from django.test import TestCase
-from apps_core.bookings.models import Booking
+from importlib import import_module
+from types import SimpleNamespace
+from django.contrib.auth import get_user_model
+from django.db.models.deletion import ProtectedError
+from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
+from unittest.mock import Mock
+from apps_core.bookings.models import Booking, BookingExtra
 from apps_core.bookings.services import change_booking_status, calculate_booking_price, create_booking, get_availability_status
 from apps_core.customers.models import Customer
 from apps_core.services.models import Service, ExtraService
 from apps_core.staff.models import Staff
+
+
+User = get_user_model()
+
+
+class BookingExtraSnapshotMigrationTests(SimpleTestCase):
+    def test_missing_extra_service_fails_with_association_identifier(self):
+        migration_module = import_module(
+            "apps_core.bookings.migrations."
+            "0005_preserve_booking_history_and_extra_snapshots"
+        )
+
+        class MissingExtraService(Exception):
+            pass
+
+        class HistoricalExtraService:
+            DoesNotExist = MissingExtraService
+
+        class HistoricalBookingExtra:
+            class DoesNotExist(Exception):
+                pass
+
+            def __init__(self):
+                self.pk = 42
+                self.extra_service_id = 99
+
+            @property
+            def extra_service(self):
+                raise MissingExtraService
+
+        row = HistoricalBookingExtra()
+        queryset = Mock()
+        queryset.using.return_value.iterator.return_value = [row]
+        HistoricalBookingExtra.objects = queryset
+
+        historical_apps = Mock()
+        historical_apps.get_model.side_effect = [
+            HistoricalBookingExtra,
+            HistoricalExtraService,
+        ]
+        schema_editor = SimpleNamespace(
+            connection=SimpleNamespace(alias="reporting")
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            r"BookingExtra #42: ExtraService #99 does not exist",
+        ):
+            migration_module.backfill_booking_extra_snapshots(
+                historical_apps,
+                schema_editor,
+            )
+
+        queryset.using.assert_called_once_with("reporting")
+        queryset.using.return_value.select_related.assert_not_called()
 
 
 class BookingStatusTransitionTests(TestCase):
@@ -79,6 +140,21 @@ class BookingStatusTransitionTests(TestCase):
             booking.status,
             "cancelled",
         )
+
+    def test_stale_booking_instance_cannot_bypass_current_status(self):
+        booking = self.create_booking("pending")
+        stale_booking = Booking.objects.get(pk=booking.pk)
+
+        change_booking_status(booking, "cancelled")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Booking cannot move from Cancelled to Confirmed",
+        ):
+            change_booking_status(stale_booking, "confirmed")
+
+        stale_booking.refresh_from_db()
+        self.assertEqual(stale_booking.status, "cancelled")
 
     def test_confirmed_can_move_to_in_progress(self):
         booking = self.create_booking("confirmed")
@@ -352,12 +428,14 @@ class BookingCreationTests(TestCase):
             is_active=True,
         )
 
+        self.booking_date = timezone.localdate() + timedelta(days=2)
+
     def test_booking_is_created_successfully(self):
         booking = create_booking(
             customer=self.customer,
             data={
                 "service": self.service,
-                "booking_date": date(2026, 11, 10),
+                "booking_date": self.booking_date,
                 "booking_time": time(10, 0),
                 "address": "Test Address",
                 "city": "Nairobi",
@@ -382,20 +460,83 @@ class BookingCreationTests(TestCase):
 
         self.assertEqual(
             booking.booking_date,
-            date(2026, 11, 10),
+            self.booking_date,
         )
 
         self.assertEqual(
             booking.booking_time,
             time(10, 0),
         )
+        self.assertIsNone(booking.created_by)
+
+    def test_booking_can_be_attributed_to_authenticated_user(self):
+        user = User.objects.create_user(
+            username="booking-owner",
+            email="booking-owner@example.com",
+            password="test-password",
+        )
+
+        self.customer.user = user
+        self.customer.save(update_fields=["user"])
+
+        booking = create_booking(
+            customer=self.customer,
+            data={
+                "service": self.service,
+                "booking_date": self.booking_date,
+                "booking_time": time(10, 0),
+                "address": "Test Address",
+                "city": "Nairobi",
+                "property_size": 100,
+                "rooms": 2,
+                "extras": [],
+            },
+            created_by=user,
+        )
+
+        self.assertEqual(booking.customer_id, self.customer.pk)
+        self.assertEqual(booking.created_by_id, user.pk)
+
+    def test_authenticated_user_without_customer_profile_is_rejected(self):
+        user = User.objects.create_user(
+            username="booking-owner-no-profile",
+            email="booking-owner-no-profile@example.com",
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Your account does not have a customer profile. "
+            "Please contact CLEANEX support before booking.",
+        ):
+            create_booking(
+                customer=self.customer,
+                data={},
+                created_by=user,
+            )
+
+    def test_booking_without_authenticated_user_is_unattributed(self):
+        booking = create_booking(
+            customer=self.customer,
+            data={
+                "service": self.service,
+                "booking_date": self.booking_date,
+                "booking_time": time(10, 0),
+                "address": "Test Address",
+                "city": "Nairobi",
+                "property_size": 100,
+                "rooms": 2,
+                "extras": [],
+            },
+        )
+
+        self.assertIsNone(booking.created_by_id)
 
     def test_new_booking_starts_as_pending(self):
         booking = create_booking(
             customer=self.customer,
             data={
                 "service": self.service,
-                "booking_date": date(2026, 11, 11),
+                "booking_date": self.booking_date,
                 "booking_time": time(10, 0),
                 "address": "Test Address",
                 "city": "Nairobi",
@@ -415,7 +556,7 @@ class BookingCreationTests(TestCase):
             customer=self.customer,
             data={
                 "service": self.service,
-                "booking_date": date(2026, 11, 12),
+                "booking_date": self.booking_date,
                 "booking_time": time(10, 0),
                 "address": "Test Address",
                 "city": "Nairobi",
@@ -435,7 +576,7 @@ class BookingCreationTests(TestCase):
             customer=self.customer,
             data={
                 "service": self.service,
-                "booking_date": date(2026, 11, 13),
+                "booking_date": self.booking_date,
                 "booking_time": time(10, 0),
                 "address": "Test Address",
                 "city": "Nairobi",
@@ -455,7 +596,7 @@ class BookingCreationTests(TestCase):
             customer=self.customer,
             data={
                 "service": self.service,
-                "booking_date": date(2026, 11, 14),
+                "booking_date": self.booking_date,
                 "booking_time": time(10, 0),
                 "address": "Test Address",
                 "city": "Nairobi",
@@ -474,6 +615,133 @@ class BookingCreationTests(TestCase):
             booking.extras.first().extra_service,
             self.extra,
         )
+
+        booking_extra = booking.extras.first()
+        self.assertEqual(
+            booking_extra.extra_service_name,
+            "Window Cleaning",
+        )
+        self.assertEqual(
+            booking_extra.extra_service_price,
+            Decimal("300.00"),
+        )
+
+    def test_extra_snapshots_do_not_change_with_catalogue(self):
+        booking = create_booking(
+            customer=self.customer,
+            data={
+                "service": self.service,
+                "booking_date": self.booking_date,
+                "booking_time": time(10, 0),
+                "address": "Test Address",
+                "city": "Nairobi",
+                "property_size": 100,
+                "rooms": 2,
+                "extras": [self.extra],
+            },
+        )
+
+        self.extra.name = "Updated Window Cleaning"
+        self.extra.price = Decimal("450.00")
+        self.extra.save(update_fields=["name", "price"])
+
+        booking_extra = booking.extras.get()
+        self.assertEqual(booking_extra.extra_service_name, "Window Cleaning")
+        self.assertEqual(
+            booking_extra.extra_service_price,
+            Decimal("300.00"),
+        )
+
+    def test_deactivating_extra_preserves_existing_booking_extra(self):
+        booking = create_booking(
+            customer=self.customer,
+            data={
+                "service": self.service,
+                "booking_date": self.booking_date,
+                "booking_time": time(10, 0),
+                "address": "Test Address",
+                "city": "Nairobi",
+                "property_size": 100,
+                "rooms": 2,
+                "extras": [self.extra],
+            },
+        )
+
+        self.extra.is_active = False
+        self.extra.save(update_fields=["is_active"])
+
+        self.assertEqual(booking.extras.count(), 1)
+
+    def test_inactive_extra_cannot_be_selected_for_new_booking(self):
+        self.extra.is_active = False
+        self.extra.save(update_fields=["is_active"])
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "One or more selected additional services are no longer available.",
+        ):
+            create_booking(
+                customer=self.customer,
+                data={
+                    "service": self.service,
+                    "booking_date": self.booking_date,
+                    "booking_time": time(10, 0),
+                    "address": "Test Address",
+                    "city": "Nairobi",
+                    "property_size": 100,
+                    "rooms": 2,
+                    "extras": [self.extra],
+                },
+            )
+
+    def test_extra_with_booking_history_cannot_be_deleted(self):
+        create_booking(
+            customer=self.customer,
+            data={
+                "service": self.service,
+                "booking_date": self.booking_date,
+                "booking_time": time(10, 0),
+                "address": "Test Address",
+                "city": "Nairobi",
+                "property_size": 100,
+                "rooms": 2,
+                "extras": [self.extra],
+            },
+        )
+
+        with self.assertRaises(ProtectedError):
+            self.extra.delete()
+
+
+class CustomerBookingRetentionTests(TestCase):
+    def setUp(self):
+        self.customer = Customer.objects.create(
+            full_name="Retention Customer",
+            email="retention@example.com",
+            phone="0712345678",
+            address="Test Address",
+            city="Nairobi",
+        )
+
+    def test_customer_with_booking_history_cannot_be_deleted(self):
+        Booking.objects.create(
+            customer=self.customer,
+            booking_date=date(2026, 11, 20),
+            booking_time=time(10, 0),
+            address="Test Address",
+            city="Nairobi",
+            total_price=Decimal("1000.00"),
+        )
+
+        with self.assertRaises(ProtectedError):
+            self.customer.delete()
+
+    def test_customer_without_bookings_can_be_deleted(self):
+        customer_id = self.customer.pk
+
+        self.customer.delete()
+
+        self.assertFalse(Customer.objects.filter(pk=customer_id).exists())
 
 
 
@@ -566,4 +834,3 @@ class BookingAvailabilityStatusTests(TestCase):
             status,
             "time_unavailable",
         )
-
