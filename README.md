@@ -102,9 +102,30 @@ Staff use Django admin to prepare quote amounts and validity dates, change quote
 
 Quote status changes create durable `QuoteStatusNotification` records with recipient, subject, body snapshots, attempt count, and delivery status. Delivery is claimed atomically, sent through the configured email backend, and can be retried by authorised staff from admin.
 
-## Screenshots
+## Application screenshots
 
-TODO: add application screenshots (home page, services, quote form, booking form, booking tracking, payment flow, customer dashboard, and admin workflows). Suggested location: create a new `docs/screenshots/` directory or use the existing `static/images/` directory.
+CLEANEX customer-facing pages and workflows:
+
+![Homepage](screenshots/homepage.png)
+*Homepage with hero section, services overview, testimonials, and FAQ.*
+
+![Services page](screenshots/servicespage.png)
+*Service catalogue with categories and pricing.*
+
+![Service detail page](screenshots/servicesdetailpage.png)
+*Service detail view with description, pricing, and booking call-to-action.*
+
+![Gallery](screenshots/gallery.png)
+*Before/after cleaning gallery with service and category filters.*
+
+![Booking form](screenshots/bookingform.png)
+*Booking form with service, date/time, location, and extras selection.*
+
+![Booking tracking](screenshots/bookingtrack.png)
+*Public booking lookup by reference and email (demo data shown).*
+
+![Customer dashboard](screenshots/customerdashboard.png)
+*Registered customer dashboard with bookings and quote history (demo data shown).*
 
 ## Local installation and setup
 
@@ -257,7 +278,16 @@ Automated tests mock external email and Safaricom HTTP interactions; they do not
 
 ## Deployment status
 
-CLEANEX is **prepared for deployment** on Render with Neon PostgreSQL and Cloudinary, but is not yet publicly deployed — there is no live demo URL. The configuration below reflects the intended production setup; verify it in your own environment before relying on it.
+Deployment **preparation and configuration documentation are complete**, and the application has been **tested locally** (599 automated tests passing as of 2026-11-16). The project has **not yet been deployed to a live hosting environment** — there is no live demo URL.
+
+Remaining deployment steps, all future work:
+
+- Provision a Render web service and a Neon PostgreSQL database.
+- Configure environment variables in the hosting dashboard (names documented in `.env.example`; never commit real values).
+- Run migrations and create a superuser in the deployed environment.
+- Verify HTTPS, email delivery, M-Pesa sandbox callback reachability, and Cloudinary media in production-like conditions.
+
+The configuration below documents the intended Render + Neon + Cloudinary setup.
 
 ## Deployment on Render with Neon and Cloudinary
 
@@ -310,7 +340,7 @@ Email limitation: Render free web services block outbound SMTP ports 25/465/587.
 - Email delivery depends on the configured SMTP provider; Render free instances block outbound SMTP ports, so a paid instance or HTTPS email API may be required.
 - If Cloudinary credentials are absent, uploaded media falls back to local `FileSystemStorage`, which is not durable on ephemeral hosting.
 - Test coverage is strong for core workflows but lighter for some CMS/admin areas; no coverage percentage has been established.
-- Screenshots have not been added yet.
+- Screenshots cover the main customer-facing pages; admin workflows are not pictured.
 
 ## Author/contact
 
