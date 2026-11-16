@@ -211,3 +211,90 @@ class MpesaCallbackMetadata(models.Model):
         return (
             f"M-Pesa callback metadata for payment #{self.payment_id}"
         )
+
+
+class MpesaCallbackResult(models.Model):
+    """
+    Diagnostic record for an unsuccessful M-Pesa callback result.
+
+    Stores only safe provider result fields for administrator inspection.
+    It never authorizes a payment state change by itself and never stores
+    callback identifiers, phone numbers or raw payload values.
+    """
+
+    CATEGORY_CHOICES = (
+        ("user_cancelled", "User Cancelled"),
+        ("timeout", "Timeout"),
+        ("expired", "Expired"),
+        ("insufficient_balance", "Insufficient Balance"),
+        ("other", "Other Provider Result"),
+    )
+
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.CASCADE,
+        related_name="callback_results",
+    )
+
+    result_code = models.CharField(
+        max_length=50,
+    )
+
+    result_description = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+    )
+
+    category = models.CharField(
+        max_length=30,
+        choices=CATEGORY_CHOICES,
+        default="other",
+    )
+
+    received_at = models.DateTimeField(
+        default=timezone.now,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["-received_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["payment", "result_code"],
+                name="unique_mpesa_callback_result_per_payment",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"M-Pesa callback result {self.result_code} "
+            f"for payment #{self.payment_id}"
+        )
+
+
+class MpesaQueryThrottle(models.Model):
+    """
+    Shared application-wide throttle state for M-Pesa STK Push Query.
+
+    Daraja rate limits apply per API consumer rather than per payment,
+    so a single database row coordinates query requests across payments,
+    workers, and processes. The row is a singleton (pk=1) created by
+    migration.
+    """
+
+    window_started_at = models.DateTimeField()
+    request_count = models.PositiveIntegerField(default=0)
+    blocked_until = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "M-Pesa query throttle"
+        verbose_name_plural = "M-Pesa query throttle"
+
+    def __str__(self):
+        return "M-Pesa STK Push Query throttle"

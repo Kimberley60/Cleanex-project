@@ -25,7 +25,7 @@ CLEANEX is a professional cleaning-services web application for the Kenyan marke
   - `staff/` — staff records and availability/assignment services.
   - `bookings/` — booking model/services/views, tracking, admin.
   - `quotes/` — quote requests, pricing estimates, staff quotation workflow.
-  - `payments/` — payment model/services, M-Pesa Daraja integration, callback, reconciliation command.
+  - `payments/` — payment model/services, M-Pesa Daraja integration, callback, callback diagnostics, shared query throttle, reconciliation command.
   - `notifications/` — quote-status notification persistence/delivery/retry.
   - `gallery/` — legacy gallery and public `GalleryPhoto` records.
   - `website/` — hero/process CMS models and the shared `website_content` context processor.
@@ -59,6 +59,9 @@ CLEANEX is a professional cleaning-services web application for the Kenyan marke
 - `QuoteRequest` → optional `Customer` and `Service`; stores estimate (`estimated_price`) separately from staff quotation (`proposed_amount`, `quote_valid_until`, `quote_sent_at`).
 - `Booking` → `Customer` (PROTECT), optional `created_by` user, `Service` (SET_NULL), `Staff` (SET_NULL); `BookingExtra` → `Booking` (CASCADE) and `ExtraService` (PROTECT) with name/price snapshots.
 - `Payment` → `Booking` (PROTECT); stores M-Pesa identifiers (`checkout_request_id`, `merchant_request_id`, `mpesa_receipt`), status, and verification scheduling/lease fields (`verification_attempt_count`, `last_verification_at`, `next_verification_at`, `verification_lease_id`, `verification_lease_expires_at`).
+- `MpesaCallbackMetadata` → `Payment`; pending callback receipt/transaction-date enrichment awaiting independent verification (`status`, `attempt_count`, `last_error`, `verified_at`).
+- `MpesaCallbackResult` → `Payment` (unique per payment+result_code); read-only diagnostic of unsuccessful callback `ResultCode`/`ResultDesc` with a safe category; never changes payment state.
+- `MpesaQueryThrottle` — singleton row (pk=1, seeded by migration `0006`) holding `window_started_at`, `request_count`, `blocked_until`; coordinates STK Push Query rate limiting across all payments/workers because Daraja limits per API consumer.
 - `QuoteStatusNotification` → optional `QuoteRequest` (SET_NULL) plus `retrying_by` user; unique `event_key` prevents duplicate events.
 - `Service` → `ServiceCategory` (SET_NULL); `ServiceFeature`/`ServiceFAQ` cascade from `Service`; `GalleryPhoto` → `Service` (PROTECT).
 - `Staff` is standalone (role/city/availability) and referenced by `Booking.staff`.
@@ -101,9 +104,10 @@ CLEANEX is a professional cleaning-services web application for the Kenyan marke
 - `initiate_booking_payment` is POST-only and session-bound; it blocks duplicate attempts for `paid`/`initiating`/`processing`/`unknown`, reuses `pending`, and creates a new record after `failed`. It re-checks `cancelled` inside `select_for_update` before creating/initiating.
 - `initiate_payment` persists `initiating`, calls `MpesaIntegration.initiate_stk_push`, then marks `processing` or `unknown`/`failed` appropriately.
 - `mpesa_callback` (`payments/mpesa/callback/`, CSRF-exempt POST) parses the Daraja payload and calls `process_mpesa_callback`, which uses the callback only as a trigger to run `verify_payment`.
-- `verify_payment` performs an independent STK Push Query (`query_stk_push`) for `processing`/`unknown` payments, validates checkout/merchant IDs, and applies `mark_payment_paid`/`mark_payment_failed` under a short lock. All query paths share a DB-backed verification guard: atomic lease claim, cooldown via `next_verification_at`, bounded exponential backoff with jitter, and `Retry-After` handling for HTTP 429/5xx.
-- `MpesaIntegration` reads `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, `MPESA_CALLBACK_URL`, and `MPESA_ENVIRONMENT` (`sandbox`/`production`) and selects the Daraja base URL accordingly.
-- `reconcile_mpesa_payments` (`python manage.py reconcile_mpesa_payments [--limit N] [--dry-run] [--payment-id ID] [--delay SECONDS]`) re-checks `processing`/`unknown` payments and pending callback metadata with a checkout ID; it respects the same verification cooldown/lease, reports skipped payments, and defaults to limit 100/max 500 with a 1-second provider-attempt delay.
+- `verify_payment` performs an independent STK Push Query (`query_stk_push`) for `processing`/`unknown` payments, validates checkout/merchant IDs, and applies `mark_payment_paid`/`mark_payment_failed` under a short lock. All query paths share two layers of protection: a per-payment DB-backed verification guard (atomic lease claim, cooldown via `next_verification_at`, bounded exponential backoff with jitter, `Retry-After` handling) and a shared application-wide throttle (`_claim_mpesa_query_slot`/`_record_mpesa_query_throttled`) that caps queries per 60-second window and sets a shared `blocked_until` on HTTP 429. Both `verify_payment` and `_stk_query_paid_success_result` claim a slot before calling the provider; no other code path calls `query_stk_push`.
+- Callbacks with non-zero `ResultCode` are persisted via `MpesaCallbackResult` (idempotent per payment+code, safe category mapping) for admin diagnostics; they never alter payment state. `reconcile_callback_metadata`/`_verify_and_apply_callback_metadata` independently re-query Daraja before applying paid-payment metadata enrichment.
+- `MpesaIntegration` reads `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, `MPESA_CALLBACK_URL`, and `MPESA_ENVIRONMENT` (`sandbox`/`production`) and selects the Daraja base URL accordingly. `get_access_token` is called fresh for every STK Push/Query request — there is no token caching, so each verification costs two Daraja HTTP requests (OAuth + query). `_raise_for_status` raises `MpesaProviderError` with safe diagnostics (`operation`, `status_code`, `retry_after` header, `request_id` from headers/body, `error_code`/`error_message`); response bodies are never logged.
+- `reconcile_mpesa_payments` (`python manage.py reconcile_mpesa_payments [--limit N] [--dry-run] [--payment-id ID] [--delay SECONDS]`) re-checks `processing`/`unknown` payments and pending callback metadata with a checkout ID; it respects the same verification cooldown/lease and shared query throttle, reports skipped payments, and defaults to limit 100/max 500 with a 1-second provider-attempt delay. `--dry-run` makes no provider queries.
 
 ## Quote-status notification delivery, persistence, and staff retry
 
@@ -138,15 +142,15 @@ Implemented in `apps_core/core/rate_limit.py` and applied to public POST handler
 
 ## Database migrations and migration-management conventions
 
-- Each app owns its migrations; notable ones: `core/0004_contactenquiry`, `customers/0003_customer_county_alter_customer_user_and_more`, `customers/0004_customer_normalized_email_unique`, `bookings/0004_booking_created_by`, `bookings/0005_preserve_booking_history_and_extra_snapshots`, `quotes/0003_quoterequest_address_quoterequest_city_and_more`, `quotes/0004_alter_quoterequest_service`, `payments/0003_mpesacallbackmetadata`, `payments/0004_payment_last_verification_at_and_more`, `notifications/0001_initial`/`0002`.
+- Each app owns its migrations; notable ones: `core/0004_contactenquiry`, `customers/0003_customer_county_alter_customer_user_and_more`, `customers/0004_customer_normalized_email_unique`, `bookings/0004_booking_created_by`, `bookings/0005_preserve_booking_history_and_extra_snapshots`, `quotes/0003_quoterequest_address_quoterequest_city_and_more`, `quotes/0004_alter_quoterequest_service`, `payments/0003_mpesacallbackmetadata`, `payments/0004_payment_last_verification_at_and_more`, `payments/0005_mpesacallbackresult`, `payments/0006_mpesaquerythrottle` (creates the throttle table and seeds the singleton row via `RunPython`), `notifications/0001_initial`/`0002`.
 - Convention: change models, run `python manage.py makemigrations`, review the generated migration, and keep `makemigrations --check --dry-run` clean.
 - Verified baseline: `makemigrations --check --dry-run` reports **No changes detected**.
 
 ## Testing commands and verified test status
 
 - Full suite: `.\.venv\Scripts\python.exe manage.py test --keepdb -v 1`
-- Latest verified focused checks: `manage.py check` clean; `makemigrations --check --dry-run` no changes; `collectstatic --no-input` copied 165 files; `apps_core.core` 100 passed; `apps_core.payments` 182 passed; `DEBUG=False` settings smoke check confirmed WhiteNoise/SSL/HSTS.
-- Verified full-suite baseline: 577 passed (`manage.py test --keepdb -v 1`, 2026-11-15); `manage.py check` and `makemigrations --check --dry-run` clean.
+- Latest verified focused checks (2026-11-16): `manage.py check` clean; `makemigrations --check --dry-run` no changes; `apps_core.payments` 204 tests passed (includes `MpesaQueryThrottleTests` and `MpesaCallbackResult` diagnostics tests).
+- Verified full-suite baseline: 599 passed (`manage.py test -v 1`, 2026-11-16); `manage.py check` and `makemigrations --check --dry-run` clean. `apps_core.payments`: 204 passed (2026-11-16).
 - Focused rate-limit tests: `apps_core/core/test_rate_limit.py` (38 tests) plus policy configuration tests.
 - Tests mock external services (M-Pesa HTTP via `requests`, email via locmem backend); no real network calls.
 
@@ -174,6 +178,8 @@ Implemented in `apps_core/core/rate_limit.py` and applied to public POST handler
 - **Cache:** no `CACHES` setting is configured, so Django uses process-local `LocMemCache`. Rate-limit counters are not shared across workers/processes; production multi-worker deployments need a shared cache (Redis/Memcached) for consistent limiting. The limiter fails open if the cache is unavailable.
 - **Email:** Render free web services block outbound SMTP ports 25/465/587; SMTP credentials may boot the app but cannot deliver mail on free Render. A paid Render instance or HTTPS email API/provider is a hosting decision, not implemented here.
 - **M-Pesa reconciliation:** `reconcile_mpesa_payments` must be run manually or scheduled externally (for example a Render Cron Job); there is no built-in scheduler/task queue.
+- **M-Pesa query throttle:** `MpesaQueryThrottle` constants (`MPESA_QUERY_WINDOW_SECONDS=60`, `MPESA_QUERY_MAX_PER_WINDOW=10`, `MPESA_QUERY_DEFAULT_BLOCK_SECONDS=60`, `MPESA_QUERY_MAX_BLOCK_SECONDS=3600`) are conservative; tune for production volume. The singleton row is seeded by migration `0006`; both helpers use `select_for_update().get_or_create(pk=1)` so a missing row (e.g., after a `TransactionTestCase` flush or manual deletion) is recreated atomically rather than raising `DoesNotExist`.
+- **M-Pesa token caching:** none implemented; each query costs an OAuth request plus the query request.
 - **Notifications:** stale `sending` records after a crash require manual reconciliation.
 
 ## Outstanding work and future improvements
@@ -183,6 +189,9 @@ Implemented in `apps_core/core/rate_limit.py` and applied to public POST handler
 - `cleanexapp` and `website` still have placeholder tests.
 - Introduce a shared cache for production rate limiting.
 - Add automated scheduling for M-Pesa reconciliation and notification recovery.
+- Consider M-Pesa OAuth token caching to halve Daraja request volume.
+- Remove or wire up dead code `_enrich_paid_payment_metadata`/`_stk_query_confirms_paid_success` in `payments/services.py`.
+- Sandbox note: repeated Daraja STK Push Query HTTP 429 responses were observed during testing; Safaricom support was contacted. No production payment verification has been performed.
 
 ## Development conventions and safeguards
 

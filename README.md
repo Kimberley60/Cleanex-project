@@ -14,7 +14,7 @@ The project is organised as a backend-first Django application: models define th
 - Guest and authenticated quote requests with staff quotation workflow.
 - Customer accounts with email verification, login, password reset, profile, dashboard, and quote history.
 - Booking creation, session-bound confirmation, public tracking, and staff status management.
-- M-Pesa Daraja STK Push payments with callback handling and independent STK Push Query verification.
+- M-Pesa Daraja STK Push payments with callback handling, independent STK Push Query verification, persistent callback diagnostics, and a shared application-wide query throttle.
 - Persistent quote-status email notifications with staff-authorised retry.
 - Public endpoint rate limiting for contact, quote, booking, registration, login, and password-reset forms.
 - Lightweight `/health/` endpoint for deployment health checks.
@@ -77,13 +77,21 @@ Customers book services at `/booking/`. The booking form validates service, date
 
 ### M-Pesa payment initiation and verification
 
-Eligible bookings can be paid at `/payments/booking/<id>/initiate/`. The payment flow creates a `Payment` record, calls Safaricom Daraja STK Push, and handles the callback at `/payments/mpesa/callback/`. The callback is treated as a trigger; the system independently queries Daraja with `query_stk_push` before marking a payment paid or failed.
+Eligible bookings can be paid at `/payments/booking/<id>/initiate/`. The payment flow creates a `Payment` record, calls Safaricom Daraja STK Push, and handles the callback at `/payments/mpesa/callback/`. The callback is treated only as a trigger; the system independently queries Daraja with `query_stk_push` before marking a payment paid or failed.
 
-The management command `reconcile_mpesa_payments` can re-check unresolved payments:
+Verification is deliberately conservative:
+
+- Each payment has its own verification lease (single-flight), cooldown (`next_verification_at`), and bounded exponential backoff with jitter.
+- All STK Push Query calls share an application-wide throttle (`MpesaQueryThrottle`, a database singleton) because Daraja rate-limits per API consumer, not per payment. A fixed window caps query requests across all payments and workers, and an HTTP 429 response sets a shared `blocked_until` backoff that honours `Retry-After` when present.
+- Unsuccessful callbacks (non-zero `ResultCode`) are persisted as read-only `MpesaCallbackResult` diagnostics for admin review; they never change payment state.
+- Paid payments with pending callback metadata (`MpesaCallbackMetadata`) are reconciled by independently re-querying Daraja before receipt/transaction-date enrichment is applied.
+
+The management command `reconcile_mpesa_payments` can re-check unresolved payments and pending callback metadata. It respects the same per-payment lease/cooldown and the shared query throttle, and never initiates new STK Push requests:
 
 ```powershell
 python manage.py reconcile_mpesa_payments --dry-run
 python manage.py reconcile_mpesa_payments --limit 100
+python manage.py reconcile_mpesa_payments --payment-id <payment-id>
 ```
 
 ### Staff quotation and booking management
@@ -243,10 +251,13 @@ Full suite:
 
 Latest verified baseline:
 
-- Latest verified focused checks for deployment changes: `manage.py check` clean; `makemigrations --check --dry-run` reported no changes; `collectstatic --no-input` copied 165 files; `apps_core.core` 100 tests passed; `apps_core.payments` 182 tests passed; a `DEBUG=False` settings smoke check confirmed WhiteNoise static storage, SSL redirect, and HSTS.
-- Verified full-suite baseline: 577 tests passed (`manage.py test --keepdb -v 1`, 2026-11-15); `manage.py check` and `makemigrations --check --dry-run` clean.
+- Verified full-suite baseline: 599 tests passed (`manage.py test -v 1`, 2026-11-16); `manage.py check` and `makemigrations --check --dry-run` clean. `apps_core.payments` alone: 204 tests passed (2026-11-16).
 
 Automated tests mock external email and Safaricom HTTP interactions; they do not make real payment requests.
+
+## Deployment status
+
+CLEANEX is **prepared for deployment** on Render with Neon PostgreSQL and Cloudinary, but is not yet publicly deployed — there is no live demo URL. The configuration below reflects the intended production setup; verify it in your own environment before relying on it.
 
 ## Deployment on Render with Neon and Cloudinary
 
@@ -282,7 +293,9 @@ Email limitation: Render free web services block outbound SMTP ports 25/465/587.
 - Booking success pages and payment initiation are bound to the session that created the booking.
 - Booking and extra-service history is protected with `PROTECT` relationships and name/price snapshots.
 - Customer emails are normalised and uniquely constrained; guest quotes can be linked after verification.
-- M-Pesa callbacks are not trusted as proof of payment; the system verifies with Daraja directly.
+- M-Pesa callbacks are not trusted as proof of payment; the system verifies with Daraja directly and only applies definitive query results.
+- Callback diagnostics and payment verification scheduling are persisted, so restarts and multiple workers cannot duplicate provider queries or lose rejection reasons.
+- The shared M-Pesa query throttle coordinates rate limiting across workers through the database rather than process-local memory.
 - Quote-status notifications are persisted before delivery and can be retried by authorised staff.
 - Public POST endpoints use rate limiting with normalised identifiers and digest-based cache keys.
 - Admin delete protections preserve booking, payment, and notification history.
@@ -291,6 +304,8 @@ Email limitation: Render free web services block outbound SMTP ports 25/465/587.
 
 - Rate limiting uses Django's default local-memory cache, which is not shared across multiple workers or processes; use a shared cache such as Redis or Memcached for production deployments.
 - `reconcile_mpesa_payments` must be run manually or scheduled externally.
+- Each M-Pesa query fetches a fresh OAuth access token (no token caching), so every verification costs two Daraja requests; the shared throttle bounds this but token caching would reduce request volume further.
+- The shared query throttle uses conservative constants (10 queries per 60-second window, 60-second default block); tune them if production volume requires.
 - Stale notification records in `sending` state after a process crash require manual reconciliation.
 - Email delivery depends on the configured SMTP provider; Render free instances block outbound SMTP ports, so a paid instance or HTTPS email API may be required.
 - If Cloudinary credentials are absent, uploaded media falls back to local `FileSystemStorage`, which is not durable on ephemeral hosting.

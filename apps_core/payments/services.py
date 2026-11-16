@@ -10,7 +10,12 @@ from django.db import IntegrityError, transaction
 from django.db.models import F, Q
 from django.utils import timezone
 from apps_core.bookings.models import Booking
-from apps_core.payments.models import MpesaCallbackMetadata, Payment
+from apps_core.payments.models import (
+    MpesaCallbackMetadata,
+    MpesaCallbackResult,
+    MpesaQueryThrottle,
+    Payment,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +60,15 @@ VERIFICATION_MAX_DELAY_SECONDS = 3600
 VERIFICATION_BACKOFF_EXPONENT_CAP = 7
 VERIFICATION_JITTER_RATIO = 0.2
 VERIFICATION_ELIGIBLE_STATUSES = {"processing", "unknown", "paid"}
+
+# Shared STK Push Query throttle. Daraja rate limits apply per API
+# consumer, not per payment, so query requests are coordinated across
+# all payments and workers through a single database row.
+MPESA_QUERY_THROTTLE_PK = 1
+MPESA_QUERY_WINDOW_SECONDS = 60
+MPESA_QUERY_MAX_PER_WINDOW = 10
+MPESA_QUERY_DEFAULT_BLOCK_SECONDS = 60
+MPESA_QUERY_MAX_BLOCK_SECONDS = 3600
 
 
 def _retry_after_seconds(value):
@@ -178,6 +192,99 @@ def _finish_payment_verification(
         verification_lease_expires_at=None,
         next_verification_at=next_verification_at,
     )
+
+
+def _claim_mpesa_query_slot():
+    """
+    Atomically claim one shared STK Push Query slot.
+
+    Returns True when a provider query may proceed. The claim is
+    serialized across workers by a row lock on the singleton throttle
+    record, so concurrent payments cannot exceed the shared window.
+    """
+
+    now = timezone.now()
+    window_cutoff = now - timedelta(
+        seconds=MPESA_QUERY_WINDOW_SECONDS
+    )
+
+    with transaction.atomic():
+        throttle, _ = (
+            MpesaQueryThrottle.objects
+            .select_for_update()
+            .get_or_create(
+                pk=MPESA_QUERY_THROTTLE_PK,
+                defaults={
+                    "window_started_at": now,
+                    "request_count": 0,
+                    "blocked_until": None,
+                },
+            )
+        )
+
+        if (
+            throttle.blocked_until is not None
+            and throttle.blocked_until > now
+        ):
+            return False
+
+        if throttle.window_started_at <= window_cutoff:
+            throttle.window_started_at = now
+            throttle.request_count = 0
+
+        if throttle.request_count >= MPESA_QUERY_MAX_PER_WINDOW:
+            return False
+
+        throttle.request_count += 1
+        throttle.save(
+            update_fields=[
+                "window_started_at",
+                "request_count",
+                "updated_at",
+            ]
+        )
+        return True
+
+
+def _record_mpesa_query_throttled(retry_after=None):
+    """
+    Persist a shared backoff after the provider rate-limits queries.
+
+    Honors Retry-After when present and otherwise applies a conservative
+    default block. The block is shared so no entry point can immediately
+    retry against an exhausted consumer quota.
+    """
+
+    delay = _retry_after_seconds(retry_after)
+
+    if delay is None:
+        delay = MPESA_QUERY_DEFAULT_BLOCK_SECONDS
+
+    delay = min(delay, MPESA_QUERY_MAX_BLOCK_SECONDS)
+    blocked_until = timezone.now() + timedelta(seconds=delay)
+
+    with transaction.atomic():
+        throttle, _ = (
+            MpesaQueryThrottle.objects
+            .select_for_update()
+            .get_or_create(
+                pk=MPESA_QUERY_THROTTLE_PK,
+                defaults={
+                    "window_started_at": timezone.now(),
+                    "request_count": 0,
+                    "blocked_until": None,
+                },
+            )
+        )
+
+        if (
+            throttle.blocked_until is None
+            or throttle.blocked_until < blocked_until
+        ):
+            throttle.blocked_until = blocked_until
+            throttle.save(
+                update_fields=["blocked_until", "updated_at"]
+            )
 
 
 @transaction.atomic
@@ -894,11 +1001,23 @@ def verify_payment(payment, *, mpesa_receipt=None, transaction_date=None):
     from .integrations.mpesa import MpesaIntegration
 
     try:
+        if not _claim_mpesa_query_slot():
+            logger.info(
+                "Deferring M-Pesa STK Push Query for payment %s: "
+                "shared query rate limit reached.",
+                payment.pk,
+            )
+            return payment
+
         try:
             response = MpesaIntegration().query_stk_push(
                 checkout_request_id
             )
         except requests.RequestException as exc:
+            if getattr(exc, "status_code", None) == 429:
+                _record_mpesa_query_throttled(
+                    getattr(exc, "retry_after", None)
+                )
             next_verification_at = _next_verification_at(
                 attempt_count,
                 retry_after=getattr(exc, "retry_after", None),
@@ -1083,11 +1202,23 @@ def _stk_query_paid_success_result(payment):
     from .integrations.mpesa import MpesaIntegration
 
     try:
+        if not _claim_mpesa_query_slot():
+            logger.info(
+                "Deferring M-Pesa STK Push Query for paid payment %s "
+                "metadata enrichment: shared query rate limit reached.",
+                payment.pk,
+            )
+            return False, "cooldown"
+
         try:
             response = MpesaIntegration().query_stk_push(
                 checkout_request_id
             )
         except requests.RequestException as exc:
+            if getattr(exc, "status_code", None) == 429:
+                _record_mpesa_query_throttled(
+                    getattr(exc, "retry_after", None)
+                )
             next_verification_at = _next_verification_at(
                 attempt_count,
                 retry_after=getattr(exc, "retry_after", None),
@@ -1315,6 +1446,38 @@ def _enrich_paid_payment_metadata(
         return locked_payment
 
 
+def _callback_metadata_rejection_reason(
+    stk_callback,
+    merchant_request_id,
+    payment,
+):
+    """
+    Return a safe reason code when callback metadata is not eligible.
+
+    Returns None when the callback is eligible for metadata capture.
+    The reason never includes callback identifiers or payload values.
+    """
+
+    result_code = stk_callback.get("ResultCode")
+
+    if result_code is None:
+        return "missing_result_code"
+
+    if str(result_code) != "0":
+        return "nonzero_result_code"
+
+    if (
+        not isinstance(merchant_request_id, str)
+        or not merchant_request_id
+    ):
+        return "merchant_request_id_missing"
+
+    if merchant_request_id != payment.merchant_request_id:
+        return "merchant_request_id_mismatch"
+
+    return None
+
+
 def _callback_metadata_allowed(stk_callback, merchant_request_id, payment):
     """
     Return True only when callback metadata may be captured for this payment.
@@ -1324,10 +1487,76 @@ def _callback_metadata_allowed(stk_callback, merchant_request_id, payment):
     """
 
     return (
-        str(stk_callback.get("ResultCode")) == "0"
-        and isinstance(merchant_request_id, str)
-        and bool(merchant_request_id)
-        and merchant_request_id == payment.merchant_request_id
+        _callback_metadata_rejection_reason(
+            stk_callback,
+            merchant_request_id,
+            payment,
+        )
+        is None
+    )
+
+
+def _log_callback_metadata_rejection(payment, stk_callback, reason):
+    """
+    Log safe diagnostics for a rejected callback-metadata capture.
+
+    Only the rejection reason and sanitized provider result fields are
+    logged. Callback identifiers, phone numbers and raw payload values
+    are never included.
+    """
+
+    logger.warning(
+        "Ignoring M-Pesa callback metadata for payment %s: %s "
+        "(result_code=%s result_description=%s).",
+        payment.pk,
+        reason,
+        _safe_query_result_code(stk_callback.get("ResultCode")),
+        _safe_query_result_description(stk_callback.get("ResultDesc")),
+    )
+
+
+MPESA_CALLBACK_RESULT_CATEGORIES = {
+    "1019": "expired",
+    "1032": "user_cancelled",
+    "1037": "timeout",
+    "1": "insufficient_balance",
+}
+
+
+def _callback_result_category(result_code):
+    """
+    Return a diagnostic category for a callback ResultCode.
+
+    Unknown non-zero codes are categorized as "other"; categories are
+    diagnostic labels only and never drive payment state changes.
+    """
+
+    return MPESA_CALLBACK_RESULT_CATEGORIES.get(
+        str(result_code),
+        "other",
+    )
+
+
+def _record_callback_result_diagnostic(payment, stk_callback):
+    """
+    Persist a safe diagnostic record for a non-zero callback ResultCode.
+
+    The record is informational only: it never authorizes a payment
+    state change and never stores callback identifiers or raw payload
+    values. Duplicate deliveries of the same result are idempotent.
+    """
+
+    result_code = _safe_query_result_code(stk_callback.get("ResultCode"))
+
+    MpesaCallbackResult.objects.get_or_create(
+        payment=payment,
+        result_code=result_code,
+        defaults={
+            "result_description": _safe_query_result_description(
+                stk_callback.get("ResultDesc")
+            ),
+            "category": _callback_result_category(result_code),
+        },
     )
 
 
@@ -1727,14 +1956,23 @@ def process_mpesa_callback(payload):
             "callback verification."
         )
 
-    callback_metadata_allowed = _callback_metadata_allowed(
+    metadata_rejection_reason = _callback_metadata_rejection_reason(
         stk_callback,
         merchant_request_id,
         payment,
     )
+    callback_metadata_allowed = metadata_rejection_reason is None
+
+    if metadata_rejection_reason == "nonzero_result_code":
+        _record_callback_result_diagnostic(payment, stk_callback)
 
     if payment.status == "paid":
         if not callback_metadata_allowed:
+            _log_callback_metadata_rejection(
+                payment,
+                stk_callback,
+                metadata_rejection_reason,
+            )
             return payment
 
         metadata_record = _store_callback_metadata(
@@ -1749,10 +1987,10 @@ def process_mpesa_callback(payload):
         return _verify_and_apply_callback_metadata(metadata_record)
 
     if not callback_metadata_allowed:
-        logger.warning(
-            "Ignoring M-Pesa callback metadata for payment %s because "
-            "the callback was not eligible for metadata capture.",
-            payment.pk,
+        _log_callback_metadata_rejection(
+            payment,
+            stk_callback,
+            metadata_rejection_reason,
         )
         return verify_payment(payment)
 

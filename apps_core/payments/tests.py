@@ -19,10 +19,21 @@ from django.utils import timezone
 from apps_core.bookings.models import Booking
 from unittest.mock import Mock, patch
 from apps_core.customers.models import Customer
-from apps_core.payments.models import MpesaCallbackMetadata, Payment
-from apps_core.payments.admin import PaymentAdmin
+from apps_core.payments.models import (
+    MpesaCallbackMetadata,
+    MpesaCallbackResult,
+    MpesaQueryThrottle,
+    Payment,
+)
+from apps_core.payments.admin import (
+    MpesaCallbackResultAdmin,
+    PaymentAdmin,
+)
 from apps_core.payments import views as payment_views
 from apps_core.payments.services import (
+    MPESA_QUERY_DEFAULT_BLOCK_SECONDS,
+    MPESA_QUERY_MAX_PER_WINDOW,
+    MPESA_QUERY_WINDOW_SECONDS,
     create_payment,
     get_payment_for_booking,
     initiate_payment,
@@ -1366,6 +1377,12 @@ class MpesaCallbackTests(TestCase):
             next_verification_at=None,
             verification_lease_id=None,
             verification_lease_expires_at=None,
+        )
+        MpesaQueryThrottle.objects.filter(pk=1).update(
+            request_count=0,
+            window_started_at=timezone.now()
+            - timedelta(seconds=MPESA_QUERY_WINDOW_SECONDS + 1),
+            blocked_until=None,
         )
         self.payment.refresh_from_db()
 
@@ -3549,6 +3566,307 @@ class MpesaCallbackTests(TestCase):
         self.assertIsNone(self.payment.mpesa_receipt)
         self.assertEqual(mock_query.call_count, 2)
 
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_nonzero_callback_result_logs_safe_diagnostics(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+
+        with self.assertLogs(
+            "apps_core.payments.services",
+            level="WARNING",
+        ) as logs:
+            payment = process_mpesa_callback(
+                self.failed_callback_payload()
+            )
+
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, "processing")
+        output = "\n".join(logs.output)
+        self.assertIn("nonzero_result_code", output)
+        self.assertIn("result_code=1032", output)
+        self.assertIn("Request cancelled by user.", output)
+        self.assertNotIn("callback-checkout-123", output)
+        self.assertNotIn("callback-merchant-123", output)
+        self.assertNotIn("254712345678", output)
+        mock_query.assert_called_once_with("callback-checkout-123")
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_missing_callback_merchant_id_logs_reason(
+        self,
+        mock_query,
+    ):
+        mock_query.return_value = self.successful_query_response()
+        payload = self.successful_callback_payload()
+        del payload["Body"]["stkCallback"]["MerchantRequestID"]
+
+        with self.assertLogs(
+            "apps_core.payments.services",
+            level="WARNING",
+        ) as logs:
+            payment = process_mpesa_callback(payload)
+
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, "paid")
+        self.assertIn(
+            "merchant_request_id_missing",
+            "\n".join(logs.output),
+        )
+        mock_query.assert_called_once_with("callback-checkout-123")
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_mismatched_callback_merchant_id_logs_reason(
+        self,
+        mock_query,
+    ):
+        mock_query.return_value = self.successful_query_response()
+        payload = self.successful_callback_payload()
+        payload["Body"]["stkCallback"]["MerchantRequestID"] = (
+            "wrong-merchant"
+        )
+
+        with self.assertLogs(
+            "apps_core.payments.services",
+            level="WARNING",
+        ) as logs:
+            payment = process_mpesa_callback(payload)
+
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, "paid")
+        output = "\n".join(logs.output)
+        self.assertIn("merchant_request_id_mismatch", output)
+        self.assertNotIn("wrong-merchant", output)
+        mock_query.assert_called_once_with("callback-checkout-123")
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_paid_callback_rejection_logs_reason_without_query(
+        self,
+        mock_query,
+    ):
+        self.prepare_paid_payment(clear_transaction_date=True)
+
+        with self.assertLogs(
+            "apps_core.payments.services",
+            level="WARNING",
+        ) as logs:
+            payment = process_mpesa_callback(
+                self.failed_callback_payload()
+            )
+
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, "paid")
+        self.assertIn(
+            "nonzero_result_code",
+            "\n".join(logs.output),
+        )
+        mock_query.assert_not_called()
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_successful_callback_logs_no_metadata_rejection(
+        self,
+        mock_query,
+    ):
+        mock_query.return_value = self.successful_query_response()
+
+        with self.assertNoLogs(
+            "apps_core.payments.services",
+            level="WARNING",
+        ):
+            payment = process_mpesa_callback(
+                self.successful_callback_payload()
+            )
+
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, "paid")
+        mock_query.assert_called_once_with("callback-checkout-123")
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_nonzero_callback_persists_result_diagnostic(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+
+        payment = process_mpesa_callback(
+            self.failed_callback_payload()
+        )
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, "processing")
+        diagnostic = MpesaCallbackResult.objects.get(
+            payment=self.payment
+        )
+        self.assertEqual(diagnostic.result_code, "1032")
+        self.assertEqual(diagnostic.category, "user_cancelled")
+        self.assertEqual(
+            diagnostic.result_description,
+            "Request cancelled by user.",
+        )
+        self.assertIsNotNone(diagnostic.received_at)
+        mock_query.assert_called_once_with("callback-checkout-123")
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_callback_result_diagnostic_categories(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+
+        cases = {
+            1019: "expired",
+            1032: "user_cancelled",
+            1037: "timeout",
+            1: "insufficient_balance",
+            4999: "other",
+        }
+
+        for result_code, category in cases.items():
+            with self.subTest(result_code=result_code):
+                payload = self.failed_callback_payload()
+                payload["Body"]["stkCallback"]["ResultCode"] = (
+                    result_code
+                )
+
+                process_mpesa_callback(payload)
+
+                diagnostic = MpesaCallbackResult.objects.get(
+                    payment=self.payment,
+                    result_code=str(result_code),
+                )
+                self.assertEqual(diagnostic.category, category)
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_duplicate_callback_delivery_is_idempotent(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+
+        process_mpesa_callback(self.failed_callback_payload())
+        self.reset_verification_schedule()
+        process_mpesa_callback(self.failed_callback_payload())
+
+        self.assertEqual(
+            MpesaCallbackResult.objects.filter(
+                payment=self.payment
+            ).count(),
+            1,
+        )
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_out_of_order_callbacks_record_each_result(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+
+        process_mpesa_callback(self.failed_callback_payload())
+        self.reset_verification_schedule()
+
+        timeout_payload = self.failed_callback_payload()
+        timeout_payload["Body"]["stkCallback"]["ResultCode"] = 1037
+        timeout_payload["Body"]["stkCallback"]["ResultDesc"] = (
+            "Request timeout."
+        )
+        process_mpesa_callback(timeout_payload)
+
+        diagnostics = MpesaCallbackResult.objects.filter(
+            payment=self.payment
+        )
+        self.assertEqual(diagnostics.count(), 2)
+        self.assertEqual(
+            set(diagnostics.values_list("result_code", flat=True)),
+            {"1032", "1037"},
+        )
+        self.assertEqual(
+            set(diagnostics.values_list("category", flat=True)),
+            {"user_cancelled", "timeout"},
+        )
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_successful_callback_creates_no_result_diagnostic(
+        self,
+        mock_query,
+    ):
+        mock_query.return_value = self.successful_query_response()
+
+        payment = process_mpesa_callback(
+            self.successful_callback_payload()
+        )
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, "paid")
+        self.assertFalse(
+            MpesaCallbackResult.objects.filter(
+                payment=self.payment
+            ).exists()
+        )
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_callback_diagnostic_never_overwrites_verified_fields(
+        self,
+        mock_query,
+    ):
+        payment = self.prepare_paid_payment(receipt="VERIFIED123")
+        payment.transaction_date = timezone.now()
+        payment.save(update_fields=["transaction_date"])
+        original_transaction_date = payment.transaction_date
+
+        process_mpesa_callback(self.failed_callback_payload())
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, "paid")
+        self.assertEqual(payment.mpesa_receipt, "VERIFIED123")
+        self.assertEqual(
+            payment.transaction_date,
+            original_transaction_date,
+        )
+        self.assertTrue(
+            MpesaCallbackResult.objects.filter(
+                payment=self.payment
+            ).exists()
+        )
+        mock_query.assert_not_called()
+
     def test_callback_requires_body(self):
         with self.assertRaisesMessage(
             ValueError,
@@ -5684,3 +6002,323 @@ class PaymentAdminCallbackMetadataTests(TestCase):
         self.assertIn("CONFIRMED456", content)
         self.assertNotIn("APPLIED456", content)
         self.assertIn("Applied", content)
+
+
+class MpesaCallbackResultAdminTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser(
+            username="callback-result-admin",
+            email="callback-result-admin@example.com",
+            password="test-password",
+        )
+        self.request = RequestFactory().get(
+            "/admin/payments/mpesacallbackresult/"
+        )
+        self.request.user = self.user
+        self.model_admin = MpesaCallbackResultAdmin(
+            MpesaCallbackResult,
+            admin.site,
+        )
+
+    def test_add_and_delete_are_disabled(self):
+        self.assertFalse(
+            self.model_admin.has_add_permission(self.request)
+        )
+        self.assertFalse(
+            self.model_admin.has_delete_permission(self.request)
+        )
+
+    def test_all_fields_are_read_only(self):
+        for field in (
+            "payment",
+            "result_code",
+            "result_description",
+            "category",
+            "received_at",
+            "created_at",
+        ):
+            self.assertIn(field, self.model_admin.readonly_fields)
+
+
+class MpesaQueryThrottleTests(TestCase):
+    """
+    Tests for the shared application-wide STK Push Query throttle.
+    """
+
+    def setUp(self):
+        self.customer = Customer.objects.create(
+            full_name="Throttle Customer",
+            email="throttle@example.com",
+            phone="254712345678",
+        )
+        self.service = Service.objects.create(
+            name="Throttle Cleaning",
+            slug="throttle-cleaning",
+            description="Throttle test service.",
+            base_price=Decimal("5000.00"),
+            duration_hours=2,
+            is_active=True,
+        )
+        self.booking = Booking.objects.create(
+            customer=self.customer,
+            service=self.service,
+            booking_date="2030-01-15",
+            booking_time="10:00",
+            address="Throttle Address",
+            city="Nairobi",
+            total_price=Decimal("5000.00"),
+            status="pending",
+        )
+        self.throttle = MpesaQueryThrottle.objects.get(pk=1)
+
+    def create_processing_payment(self, suffix):
+        return Payment.objects.create(
+            booking=self.booking,
+            amount=Decimal("5000.00"),
+            method="mpesa",
+            status="processing",
+            phone_number="254712345678",
+            checkout_request_id=f"throttle-checkout-{suffix}",
+            merchant_request_id=f"throttle-merchant-{suffix}",
+        )
+
+    def fill_query_window(self):
+        self.throttle.request_count = MPESA_QUERY_MAX_PER_WINDOW
+        self.throttle.window_started_at = timezone.now()
+        self.throttle.blocked_until = None
+        self.throttle.save()
+
+    def provider_error(self, status_code, retry_after=None):
+        from apps_core.payments.integrations.mpesa import (
+            MpesaProviderError,
+        )
+
+        return MpesaProviderError(
+            f"M-Pesa stk_query request failed with HTTP {status_code}.",
+            operation="stk_query",
+            status_code=status_code,
+            retry_after=retry_after,
+        )
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_shared_window_defers_second_payment(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+        first = self.create_processing_payment("first")
+        second = self.create_processing_payment("second")
+        self.fill_query_window()
+        self.throttle.request_count = MPESA_QUERY_MAX_PER_WINDOW - 1
+        self.throttle.save(update_fields=["request_count"])
+
+        verify_payment(first)
+        verify_payment(second)
+
+        self.assertEqual(mock_query.call_count, 1)
+        second.refresh_from_db()
+        self.assertEqual(second.status, "processing")
+        self.assertIsNotNone(second.next_verification_at)
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_expired_window_allows_queries_again(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+        payment = self.create_processing_payment("expired")
+        self.fill_query_window()
+        self.throttle.window_started_at = timezone.now() - timedelta(
+            seconds=MPESA_QUERY_WINDOW_SECONDS + 1
+        )
+        self.throttle.save(update_fields=["window_started_at"])
+
+        verify_payment(payment)
+
+        self.assertEqual(mock_query.call_count, 1)
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_blocked_until_defers_all_payments(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+        first = self.create_processing_payment("blocked-1")
+        second = self.create_processing_payment("blocked-2")
+        self.throttle.blocked_until = timezone.now() + timedelta(
+            seconds=300
+        )
+        self.throttle.save(update_fields=["blocked_until"])
+
+        verify_payment(first)
+        verify_payment(second)
+
+        mock_query.assert_not_called()
+        for payment in (first, second):
+            payment.refresh_from_db()
+            self.assertEqual(payment.status, "processing")
+            self.assertIsNotNone(payment.next_verification_at)
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_http_429_with_retry_after_sets_shared_block(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = self.provider_error(
+            429,
+            retry_after="120",
+        )
+        payment = self.create_processing_payment("retry-after")
+
+        verify_payment(payment)
+
+        self.throttle.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertIsNotNone(self.throttle.blocked_until)
+        self.assertGreater(
+            self.throttle.blocked_until,
+            timezone.now() + timedelta(seconds=100),
+        )
+        self.assertEqual(payment.status, "processing")
+        self.assertGreater(
+            payment.next_verification_at,
+            timezone.now() + timedelta(seconds=100),
+        )
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_http_429_without_retry_after_uses_default_block(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = self.provider_error(429)
+        payment = self.create_processing_payment("no-retry-after")
+
+        verify_payment(payment)
+
+        self.throttle.refresh_from_db()
+        self.assertIsNotNone(self.throttle.blocked_until)
+        self.assertLess(
+            self.throttle.blocked_until,
+            timezone.now()
+            + timedelta(seconds=MPESA_QUERY_DEFAULT_BLOCK_SECONDS + 30),
+        )
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_http_500_does_not_set_shared_block(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = self.provider_error(500)
+        payment = self.create_processing_payment("http-500")
+
+        verify_payment(payment)
+
+        self.throttle.refresh_from_db()
+        self.assertIsNone(self.throttle.blocked_until)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "processing")
+        self.assertIsNotNone(payment.next_verification_at)
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_callback_verification_respects_shared_throttle(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+        payment = self.create_processing_payment("callback")
+        self.fill_query_window()
+
+        process_mpesa_callback(
+            {
+                "Body": {
+                    "stkCallback": {
+                        "MerchantRequestID": (
+                            "throttle-merchant-callback"
+                        ),
+                        "CheckoutRequestID": (
+                            "throttle-checkout-callback"
+                        ),
+                        "ResultCode": 1032,
+                        "ResultDesc": "Request cancelled by user.",
+                    }
+                }
+            }
+        )
+
+        mock_query.assert_not_called()
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "processing")
+        self.assertTrue(
+            MpesaCallbackResult.objects.filter(
+                payment=payment
+            ).exists()
+        )
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_reconciliation_respects_shared_throttle(
+        self,
+        mock_query,
+    ):
+        mock_query.side_effect = requests.ConnectionError("boom")
+        first = self.create_processing_payment("reconcile-1")
+        second = self.create_processing_payment("reconcile-2")
+        self.fill_query_window()
+        self.throttle.request_count = MPESA_QUERY_MAX_PER_WINDOW - 1
+        self.throttle.save(update_fields=["request_count"])
+
+        call_command(
+            "reconcile_mpesa_payments",
+            stdout=StringIO(),
+        )
+
+        self.assertEqual(mock_query.call_count, 1)
+        for payment in (first, second):
+            payment.refresh_from_db()
+            self.assertEqual(payment.status, "processing")
+
+    @patch(
+        "apps_core.payments.integrations.mpesa."
+        "MpesaIntegration.query_stk_push"
+    )
+    def test_definitive_query_result_still_transitions_payment(
+        self,
+        mock_query,
+    ):
+        payment = self.create_processing_payment("definitive")
+        mock_query.return_value = {
+            "ResponseCode": "0",
+            "CheckoutRequestID": "throttle-checkout-definitive",
+            "MerchantRequestID": "throttle-merchant-definitive",
+            "ResultCode": "0",
+            "ResultDesc": "Transaction processed successfully.",
+        }
+
+        verify_payment(payment)
+
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "paid")
+        self.assertEqual(mock_query.call_count, 1)

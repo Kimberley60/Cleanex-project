@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import MpesaCallbackMetadata, Payment
+from .models import MpesaCallbackMetadata, MpesaCallbackResult, Payment
 
 
 @admin.register(Payment)
@@ -127,6 +127,48 @@ class PaymentAdmin(admin.ModelAdmin):
         if metadata is None or metadata.verified_at is None:
             return self.get_empty_value_display()
         return metadata.verified_at
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MpesaCallbackResult)
+class MpesaCallbackResultAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "payment",
+        "result_code",
+        "category",
+        "result_description",
+        "received_at",
+    )
+
+    list_filter = (
+        "category",
+        "received_at",
+    )
+
+    search_fields = (
+        "payment__id",
+        "result_code",
+    )
+
+    readonly_fields = (
+        "payment",
+        "result_code",
+        "result_description",
+        "category",
+        "received_at",
+        "created_at",
+    )
+
+    ordering = (
+        "-received_at",
+        "-pk",
+    )
+
+    def has_add_permission(self, request):
+        return False
 
     def has_delete_permission(self, request, obj=None):
         return False
